@@ -435,7 +435,7 @@ tbody td { padding: 9px 12px; vertical-align: middle; }
               <th onclick="doSort('name')">姓名<span class="sa" id="sa-name"></span></th>
               <th onclick="doSort('location')">地点<span class="sa" id="sa-location"></span></th>
               <th onclick="doSort('position')">职位<span class="sa" id="sa-position"></span></th>
-              <th>人选背景</th>
+              <th>学历</th>
               <th>LinkedIn</th>
               <th>详情</th>
             </tr>
@@ -1016,22 +1016,37 @@ function goPage(p){page=p;renderTable();document.querySelector('.content').scrol
 // ═══════════════════════════════════════════════════════════
 function exportExcel(){
   if(!filtered.length){alert('当前没有数据可导出');return;}
-  const hdr=['行业','证券代码','公司名','上市板块','上市时间','市值（亿）','市值货币',
-             '注册地','姓名','地点','职位','人选背景','LinkedIn',
-             '是否上市时在任','年龄','性别','会计师事务所经验','投行/券商经验'];
+  const hdr=['行业','证券代码','公司名称','上市板块','上市时间','市值（亿元）',
+             '省份','注册地','姓名','职位','学历','年龄','性别',
+             '上市时在任','会计师事务所经验','投行/券商经验','LinkedIn'];
   const rows=filtered.map(d=>[
     d.industry||'', d.stockCode, d.companyName, d.exchange,
     d.listingYear||'',
     d.marketCapValue!=null?d.marketCapValue:'',
-    d.marketCapCurrency||'', d.registrationLoc||'',
-    d.name, d.location||'', d.position, d.background||'', d.linkedin||'',
-    d.isIPOServing?'是（上市时在任）':'否（上市后加入）',
+    getProvince(d.registrationLoc)||'', d.registrationLoc||'',
+    d.name, d.position, d.background||'',
     d.age!=null?d.age:'', d.gender||'',
-    d.hasCPA?'是':'否', d.hasIB?'是':'否'
+    d.isIPOServing?'是':'否',
+    d.hasCPA?'是':'', d.hasIB?'是':'', d.linkedin||''
   ]);
   const wb=XLSX.utils.book_new();
   const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
-  ws['!cols']=[8,10,14,10,8,10,8,10,10,8,12,36,30,8,6,6,12,12].map(w=>({wch:w}));
+
+  // 列宽
+  ws['!cols']=[
+    {wch:12},{wch:10},{wch:24},{wch:10},{wch:10},{wch:12},
+    {wch:8},{wch:10},{wch:8},{wch:10},{wch:8},{wch:6},{wch:6},
+    {wch:10},{wch:16},{wch:14},{wch:32}
+  ];
+
+  // 冻结首行 + 自动筛选
+  ws['!autofilter']={ref:ws['!ref']};
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  if(!wb.Workbook) wb.Workbook={};
+  if(!wb.Workbook.Views) wb.Workbook.Views=[{}];
+  if(!wb.Workbook.Sheets) wb.Workbook.Sheets=[];
+  wb.Workbook.Sheets.push({pane:{state:'frozen',ySplit:1}});
+
   XLSX.utils.book_append_sheet(wb,ws,'搜索结果');
   XLSX.writeFile(wb,`高管搜索_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
