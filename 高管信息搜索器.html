@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>上市公司高管信息搜索器</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #222; font-size: 14px; }
+
+/* ─── Header ─── */
+.header { background: #0f2744; color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.header h1 { font-size: 17px; font-weight: 600; letter-spacing: .3px; }
+.header-actions { display: flex; gap: 8px; }
+
+/* ─── Layout ─── */
+.main { display: flex; height: calc(100vh - 52px); overflow: hidden; }
+
+/* ─── Sidebar ─── */
+.sidebar { width: 268px; flex-shrink: 0; background: #fff; border-right: 1px solid #e4e7ed; overflow-y: auto; display: flex; flex-direction: column; }
+.sidebar-title { padding: 14px 16px 10px; font-size: 12px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid #f0f0f0; }
+.filter-section { padding: 12px 16px; border-bottom: 1px solid #f5f5f5; }
+.filter-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 7px; }
+.filter-input { width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; transition: border .15s; }
+.filter-input:focus { border-color: #0f2744; outline: none; box-shadow: 0 0 0 2px rgba(15,39,68,.1); }
+
+/* Checkbox */
+.cb-grid { display: flex; flex-direction: column; gap: 4px; }
+.cb-item { display: flex; align-items: center; gap: 7px; padding: 3px 4px; border-radius: 4px; cursor: pointer; }
+.cb-item:hover { background: #f5f7ff; }
+.cb-item input[type=checkbox] { accent-color: #0f2744; width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
+.cb-item label { cursor: pointer; font-size: 13px; line-height: 1.3; }
+
+/* Radio */
+.radio-group { display: flex; gap: 14px; flex-wrap: wrap; }
+.radio-item { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.radio-item input { accent-color: #0f2744; cursor: pointer; }
+.radio-item label { font-size: 13px; cursor: pointer; }
+
+/* Multi-select dropdown */
+.ms-wrap { position: relative; }
+.ms-btn { width: 100%; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; background: #fff; cursor: pointer; text-align: left; display: flex; justify-content: space-between; align-items: center; gap: 6px; transition: border .15s; }
+.ms-btn:hover { border-color: #aaa; }
+.ms-btn.open { border-color: #0f2744; box-shadow: 0 0 0 2px rgba(15,39,68,.1); }
+.ms-btn .ms-arrow { font-size: 10px; color: #888; flex-shrink: 0; }
+.ms-btn .ms-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-dropdown { display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12); z-index: 2000; max-height: 210px; overflow-y: auto; }
+.ms-dropdown.show { display: block; }
+.ms-sa { padding: 7px 10px; border-bottom: 1px solid #eee; font-size: 11px; color: #0f2744; font-weight: 600; cursor: pointer; background: #f8faff; }
+.ms-sa:hover { background: #eff3ff; }
+.ms-opt { padding: 7px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ms-opt:hover { background: #f5f7ff; }
+.ms-opt input { accent-color: #0f2744; width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Sidebar footer */
+.sidebar-footer { padding: 14px 16px; border-top: 1px solid #e8e8e8; display: flex; gap: 8px; margin-top: auto; background: #fafafa; }
+
+/* ─── Buttons ─── */
+.btn { padding: 7px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; font-weight: 500; transition: background .15s, box-shadow .15s; }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: #0f2744; color: #fff; flex: 1; }
+.btn-primary:hover { background: #1a3a60; }
+.btn-outline { background: #fff; color: #0f2744; border: 1px solid #0f2744; }
+.btn-outline:hover { background: #f0f4fb; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-green { background: #15803d; color: #fff; }
+.btn-green:hover { background: #166534; }
+.btn-blue { background: #1d4ed8; color: #fff; }
+.btn-blue:hover { background: #1e40af; }
+.btn-orange { background: #ea580c; color: #fff; }
+.btn-orange:hover { background: #c2410c; }
+
+/* ─── Content ─── */
+.content { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Saved bar */
+.saved-bar { background: #fff; border-radius: 8px; padding: 12px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.saved-bar-title { font-size: 12px; font-weight: 600; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .5px; }
+.saved-list { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; min-height: 28px; }
+.saved-chip { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px; }
+.saved-chip-name { font-size: 12px; color: #1d4ed8; font-weight: 500; }
+.saved-chip-load { font-size: 11px; color: #2563eb; cursor: pointer; font-weight: 600; padding: 0 4px; }
+.saved-chip-load:hover { text-decoration: underline; }
+.saved-chip-del { font-size: 11px; color: #9ca3af; cursor: pointer; padding: 0 2px; }
+.saved-chip-del:hover { color: #dc2626; }
+.no-saved { color: #bbb; font-size: 12px; font-style: italic; }
+
+/* Stats row */
+.stats-row { display: flex; gap: 12px; align-items: stretch; }
+.stat-card { background: #fff; border-radius: 8px; padding: 12px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.06); min-width: 120px; }
+.stat-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: .4px; }
+.stat-val { font-size: 26px; font-weight: 700; color: #0f2744; line-height: 1.2; margin-top: 2px; }
+.stat-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+/* Data source badge */
+.datasource-badge { display: flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; border: 1px solid; }
+.badge-sample { background: #fef9c3; color: #b45309; border-color: #fde68a; }
+.badge-ifind { background: #dcfce7; color: #15803d; border-color: #86efac; }
+
+/* Table card */
+.table-card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.06); overflow: hidden; flex: 1; display: flex; flex-direction: column; }
+.table-card-header { padding: 12px 18px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }
+.table-card-header h2 { font-size: 14px; font-weight: 600; }
+.table-scroll { overflow-x: auto; flex: 1; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { padding: 9px 12px; text-align: left; border-bottom: 2px solid #e8e8e8; background: #fafafa; color: #888; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; cursor: pointer; user-select: none; position: sticky; top: 0; }
+thead th:hover { color: #0f2744; background: #f0f4fb; }
+thead th .sa { margin-left: 4px; font-size: 10px; color: #0f2744; }
+thead th.sorted { color: #0f2744; background: #eef3fb; }
+tbody tr { border-bottom: 1px solid #f5f5f5; transition: background .1s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: #f8faff; }
+tbody td { padding: 9px 12px; vertical-align: middle; }
+
+/* Tags */
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.tag-ind { background: #eff6ff; color: #1d4ed8; }
+.tag-a { background: #fef9c3; color: #b45309; }
+.tag-bj { background: #f3e8ff; color: #7c3aed; }
+.tag-us { background: #fee2e2; color: #b91c1c; }
+.tag-hk { background: #dcfce7; color: #15803d; }
+.tag-on { background: #dcfce7; color: #15803d; }
+.tag-off { background: #fef3c7; color: #b45309; }
+
+.linkedin-link { color: #0077b5; text-decoration: none; font-size: 12px; }
+.linkedin-link:hover { text-decoration: underline; }
+.dash { color: #d1d5db; }
+
+/* Empty state */
+.empty { padding: 56px 24px; text-align: center; color: #bbb; }
+.empty .ico { font-size: 40px; margin-bottom: 10px; }
+.empty p { font-size: 14px; }
+
+/* Pagination */
+.pagination { padding: 10px 16px; border-top: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; background: #fafafa; }
+.page-info { font-size: 12px; color: #aaa; }
+.page-btns { display: flex; gap: 3px; }
+.pg { padding: 4px 10px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; min-width: 32px; text-align: center; }
+.pg.cur { background: #0f2744; color: #fff; border-color: #0f2744; }
+.pg:hover:not(.cur):not(:disabled) { background: #f0f4fb; }
+.pg:disabled { opacity: .38; cursor: default; }
+.pg.ellipsis { cursor: default; border: none; background: none; }
+
+/* Modal */
+.overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9999; align-items: center; justify-content: center; }
+.overlay.show { display: flex; }
+.modal { background: #fff; border-radius: 12px; padding: 26px; width: 380px; box-shadow: 0 12px 40px rgba(0,0,0,.2); }
+.modal.modal-wide { width: 480px; }
+.modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 14px; }
+.modal input[type=text] { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 16px; }
+.modal input[type=text]:focus { border-color: #0f2744; outline: none; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Import modal specifics */
+.import-info { font-size: 13px; color: #444; margin-bottom: 12px; line-height: 1.75; }
+.import-info strong { color: #0f2744; }
+.import-stats { display: flex; gap: 10px; margin-bottom: 14px; }
+.import-stat { flex: 1; background: #f8faff; border: 1px solid #e0e8f5; border-radius: 8px; padding: 10px 14px; text-align: center; }
+.import-stat .is-num { font-size: 22px; font-weight: 700; color: #0f2744; }
+.import-stat .is-lbl { font-size: 11px; color: #888; margin-top: 2px; }
+.import-preview { border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden; margin-bottom: 14px; max-height: 160px; overflow-y: auto; }
+.import-preview table { width: 100%; font-size: 11px; border-collapse: collapse; }
+.import-preview th { background: #f5f5f5; color: #888; font-weight: 700; padding: 5px 8px; text-align: left; white-space: nowrap; }
+.import-preview td { padding: 5px 8px; border-top: 1px solid #f0f0f0; color: #444; white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+.import-warn { font-size: 12px; color: #b45309; background: #fef9c3; border-radius: 6px; padding: 7px 10px; margin-bottom: 12px; }
+.import-err { font-size: 12px; color: #b91c1c; background: #fee2e2; border-radius: 6px; padding: 7px 10px; margin-bottom: 12px; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ─── Detail Drawer ─── */
+.drawer-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.32); z-index: 3000; display: none; }
+.drawer-overlay.open { display: block; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 480px; background: #fff; box-shadow: -6px 0 30px rgba(0,0,0,.16); z-index: 3001; transform: translateX(100%); transition: transform .28s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; }
+.drawer.open { transform: translateX(0); }
+.drawer-head { background: linear-gradient(135deg,#0f2744,#1a3a60); color: #fff; padding: 22px 24px 18px; flex-shrink: 0; }
+.drawer-head-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.drawer-avatar { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; margin-bottom: 12px; }
+.drawer-name { font-size: 21px; font-weight: 700; margin-bottom: 3px; }
+.drawer-pos { font-size: 13px; opacity: .85; font-weight: 500; }
+.drawer-co { font-size: 12px; opacity: .65; margin-top: 2px; }
+.drawer-close { background: rgba(255,255,255,.15); border: none; color: #fff; font-size: 16px; cursor: pointer; padding: 6px 9px; border-radius: 6px; line-height: 1; flex-shrink: 0; }
+.drawer-close:hover { background: rgba(255,255,255,.28); }
+.drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px 32px; }
+.drawer-sec { margin-bottom: 24px; }
+.drawer-sec-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: #999; border-bottom: 1px solid #f0f0f0; padding-bottom: 7px; margin-bottom: 13px; }
+/* Info grid */
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.info-cell .lbl { font-size: 11px; color: #aaa; margin-bottom: 2px; }
+.info-cell .val { font-size: 13px; font-weight: 500; color: #222; }
+/* Tags */
+.d-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.d-tag { padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+/* Education */
+.edu-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
+.edu-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.edu-text { font-size: 13px; line-height: 1.6; color: #333; }
+.edu-school { font-weight: 600; }
+.edu-sub { color: #777; font-size: 12px; }
+/* Career timeline */
+.career-item { display: flex; gap: 12px; margin-bottom: 16px; }
+.career-item:last-child { margin-bottom: 0; }
+.tl-col { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 14px; padding-top: 4px; }
+.tl-dot { width: 11px; height: 11px; border-radius: 50%; background: #0f2744; flex-shrink: 0; }
+.tl-line { width: 2px; background: #dde3ef; flex: 1; margin-top: 5px; min-height: 20px; }
+.career-body { flex: 1; padding-bottom: 4px; }
+.c-period { font-size: 11px; color: #aaa; margin-bottom: 1px; }
+.c-role { font-size: 13px; font-weight: 600; color: #0f2744; }
+.c-co { font-size: 13px; color: #555; margin-bottom: 4px; }
+.c-detail { font-size: 12px; color: #777; line-height: 1.65; }
+/* Highlights */
+.hl-item { display: flex; gap: 8px; margin-bottom: 9px; font-size: 13px; color: #333; line-height: 1.6; }
+.hl-dot { color: #0f2744; font-weight: 700; flex-shrink: 0; padding-top: 1px; }
+/* Detail button */
+.btn-detail { padding: 4px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 5px; font-size: 12px; color: #1d4ed8; cursor: pointer; white-space: nowrap; }
+.btn-detail:hover { background: #dbeafe; }
+
+/* Toast notification */
+#toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f2744; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 99999; box-shadow: 0 4px 16px rgba(0,0,0,.25); transition: opacity .4s; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="header">
+  <h1>🔍 上市公司高管信息搜索器</h1>
+  <div class="header-actions">
+    <span class="datasource-badge badge-sample" id="data-badge">📋 示例数据</span>
+    <input type="file" id="import-file" accept=".xlsx,.xls" style="display:none" onchange="handleFileUpload(this)">
+    <button class="btn btn-orange btn-sm" onclick="document.getElementById('import-file').click()">📂 导入 iFinD 数据</button>
+    <button class="btn btn-blue btn-sm" onclick="openSaveModal()">💾 保存搜索条件</button>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+
+  <!-- ─── Sidebar ─── -->
+  <div class="sidebar">
+    <div class="sidebar-title">筛选条件</div>
+
+    <!-- 公司名称 -->
+    <div class="filter-section">
+      <div class="filter-label">公司名称</div>
+      <input type="text" id="f-company" class="filter-input" placeholder="输入关键词…" oninput="applyFilters()">
+    </div>
+
+    <!-- 上市板块 -->
+    <div class="filter-section">
+      <div class="filter-label">上市板块（可多选）</div>
+      <div class="cb-grid">
+        <div class="cb-item"><input type="checkbox" id="ex-am" value="A股主板" onchange="applyFilters()"><label for="ex-am">A股主板</label></div>
+        <div class="cb-item"><input type="checkbox" id="ex-as" value="A股科创板" onchange="applyFilters()"><label for="ex-as">A股科创板</label></div>
+        <div class="cb-item"><input type="checkbox" id="ex-ag" value="A股创业板" onchange="applyFilters()"><label for="ex-ag">A股创业板</label></div>
+        <div class="cb-item"><input type="checkbox" id="ex-bj" value="A股北交所" onchange="applyFilters()"><label for="ex-bj">A股北交所（BSE）</label></div>
+        <div class="cb-item"><input type="checkbox" id="ex-us" value="美股" onchange="applyFilters()"><label for="ex-us">美股（NYSE / NASDAQ）</label></div>
+        <div class="cb-item"><input type="checkbox" id="ex-hk" value="港股" onchange="applyFilters()"><label for="ex-hk">港股（HKEX）</label></div>
+      </div>
+    </div>
+
+    <!-- 行业 -->
+    <div class="filter-section">
+      <div class="filter-label">行业（可多选）</div>
+      <div class="ms-wrap">
+        <button class="ms-btn" id="btn-ind" onclick="toggleDD('dd-ind','btn-ind')">
+          <span class="ms-text" id="lbl-ind">全部行业</span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-dropdown" id="dd-ind">
+          <div class="ms-sa" onclick="selectAll('ind')">全选 / 全不选</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 市值 -->
+    <div class="filter-section">
+      <div class="filter-label">公司市值（可多选）</div>
+      <div class="ms-wrap">
+        <button class="ms-btn" id="btn-cap" onclick="toggleDD('dd-cap','btn-cap')">
+          <span class="ms-text" id="lbl-cap">全部市值</span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-dropdown" id="dd-cap">
+          <div class="ms-sa" onclick="selectAll('cap')">全选 / 全不选</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 注册地 -->
+    <div class="filter-section">
+      <div class="filter-label">公司注册地（可多选）</div>
+      <div class="ms-wrap">
+        <button class="ms-btn" id="btn-reg" onclick="toggleDD('dd-reg','btn-reg')">
+          <span class="ms-text" id="lbl-reg">全部地区</span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-dropdown" id="dd-reg">
+          <div class="ms-sa" onclick="selectAll('reg')">全选 / 全不选</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 上市时间 -->
+    <div class="filter-section">
+      <div class="filter-label">上市时间（可多选）</div>
+      <div class="ms-wrap">
+        <button class="ms-btn" id="btn-yr" onclick="toggleDD('dd-yr','btn-yr')">
+          <span class="ms-text" id="lbl-yr">全部年份</span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-dropdown" id="dd-yr">
+          <div class="ms-sa" onclick="selectAll('yr')">全选 / 全不选</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 职位 -->
+    <div class="filter-section">
+      <div class="filter-label">职位</div>
+      <input type="text" id="f-pos" class="filter-input" placeholder="如：CFO、财务总监…" oninput="applyFilters()">
+    </div>
+
+    <!-- 是否是上市时在任 -->
+    <div class="filter-section">
+      <div class="filter-label">是否是上市时在任</div>
+      <div class="radio-group">
+        <div class="radio-item"><input type="radio" name="srv" id="s-all" value="all" checked onchange="applyFilters()"><label for="s-all">全部</label></div>
+        <div class="radio-item"><input type="radio" name="srv" id="s-yes" value="yes" onchange="applyFilters()"><label for="s-yes">是（上市时在任）</label></div>
+        <div class="radio-item"><input type="radio" name="srv" id="s-no" value="no" onchange="applyFilters()"><label for="s-no">否（上市后加入）</label></div>
+      </div>
+    </div>
+
+    <!-- 年龄 -->
+    <div class="filter-section">
+      <div class="filter-label">候选人年龄段（可多选）</div>
+      <div class="ms-wrap">
+        <button class="ms-btn" id="btn-age" onclick="toggleDD('dd-age','btn-age')">
+          <span class="ms-text" id="lbl-age">全部年龄</span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-dropdown" id="dd-age">
+          <div class="ms-sa" onclick="selectAll('age')">全选 / 全不选</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 性别 -->
+    <div class="filter-section">
+      <div class="filter-label">候选人性别</div>
+      <div class="radio-group">
+        <div class="radio-item"><input type="radio" name="gdr" id="g-all" value="all" checked onchange="applyFilters()"><label for="g-all">全部</label></div>
+        <div class="radio-item"><input type="radio" name="gdr" id="g-m" value="男" onchange="applyFilters()"><label for="g-m">男</label></div>
+        <div class="radio-item"><input type="radio" name="gdr" id="g-f" value="女" onchange="applyFilters()"><label for="g-f">女</label></div>
+      </div>
+    </div>
+
+    <!-- 专业背景 -->
+    <div class="filter-section">
+      <div class="filter-label">专业背景</div>
+      <div class="cb-grid">
+        <div class="cb-item"><input type="checkbox" id="f-cpa" onchange="applyFilters()"><label for="f-cpa">会计师事务所经验</label></div>
+        <div class="cb-item"><input type="checkbox" id="f-ib" onchange="applyFilters()"><label for="f-ib">投行 / 券商经验</label></div>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="btn btn-primary" onclick="applyFilters()">搜索</button>
+      <button class="btn btn-outline" onclick="resetAll()">重置</button>
+    </div>
+  </div>
+
+  <!-- ─── Content ─── -->
+  <div class="content">
+
+    <!-- Saved bar -->
+    <div class="saved-bar">
+      <div class="saved-bar-title">📌 已保存的搜索条件</div>
+      <div class="saved-list" id="saved-list">
+        <span class="no-saved">暂无已保存的搜索条件</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">候选人数量</div>
+        <div class="stat-val" id="st-count">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">涉及公司</div>
+        <div class="stat-val" id="st-co">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">上市时在任</div>
+        <div class="stat-val" id="st-active">0%</div>
+      </div>
+      <div class="stat-actions">
+        <button class="btn btn-green btn-sm" onclick="exportExcel()">📥 导出 Excel</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+      <div class="table-card-header">
+        <h2>搜索结果</h2>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="pg-summary" style="font-size:12px;color:#aaa"></span>
+          <div style="display:flex;align-items:center;gap:6px;border-left:1px solid #f0f0f0;padding-left:10px;">
+            <span style="font-size:12px;color:#999;white-space:nowrap;">排序：</span>
+            <select id="sort-col-sel" onchange="onSortChange()" style="padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;color:#333;background:#fff;cursor:pointer;">
+              <option value="">— 默认 —</option>
+              <option value="listingYear">上市时间</option>
+              <option value="marketCapValue">市值</option>
+              <option value="age">年龄</option>
+              <option value="industry">行业</option>
+              <option value="exchange">上市板块</option>
+              <option value="companyName">公司名</option>
+              <option value="name">姓名</option>
+              <option value="location">地点</option>
+            </select>
+            <button id="sort-dir-btn" onclick="onSortDirToggle()" title="切换升序/降序" style="padding:4px 9px;border:1px solid #ddd;border-radius:5px;font-size:13px;background:#fff;cursor:pointer;color:#555;line-height:1;">↑</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="doSort('industry')">行业<span class="sa" id="sa-industry"></span></th>
+              <th onclick="doSort('stockCode')">证券代码<span class="sa" id="sa-stockCode"></span></th>
+              <th onclick="doSort('companyName')">公司名<span class="sa" id="sa-companyName"></span></th>
+              <th onclick="doSort('exchange')">上市板块<span class="sa" id="sa-exchange"></span></th>
+              <th onclick="doSort('listingYear')">上市时间<span class="sa" id="sa-listingYear"></span></th>
+              <th onclick="doSort('marketCapValue')">市值<span class="sa" id="sa-marketCapValue"></span></th>
+              <th onclick="doSort('name')">姓名<span class="sa" id="sa-name"></span></th>
+              <th onclick="doSort('location')">地点<span class="sa" id="sa-location"></span></th>
+              <th onclick="doSort('position')">职位<span class="sa" id="sa-position"></span></th>
+              <th>人选背景</th>
+              <th>LinkedIn</th>
+              <th>详情</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <span class="page-info" id="pg-info"></span>
+        <div class="page-btns" id="pg-btns"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ─── Detail Drawer ─── -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="drawer" id="detail-drawer">
+  <div class="drawer-head">
+    <div class="drawer-head-top">
+      <div>
+        <div class="drawer-avatar" id="d-avatar">👤</div>
+        <div class="drawer-name" id="d-name"></div>
+        <div class="drawer-pos" id="d-pos"></div>
+        <div class="drawer-co" id="d-co"></div>
+      </div>
+      <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+  </div>
+  <div class="drawer-body" id="d-body"></div>
+</div>
+
+<!-- ─── Save Modal ─── -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3>💾 保存当前搜索条件</h3>
+    <input type="text" id="save-name" placeholder="请输入名称，如：医药行业女性CFO…" maxlength="40">
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveCondition()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Import Modal ─── -->
+<div class="overlay" id="import-overlay">
+  <div class="modal modal-wide">
+    <h3>📂 导入 iFinD 数据</h3>
+    <div id="import-body">
+      <!-- filled dynamically -->
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="cancelImport()">取消</button>
+      <button class="btn btn-primary" id="import-confirm-btn" onclick="confirmImport()" disabled>确认导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" style="opacity:0"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  DATA（数据从外部 JSON 异步加载）
+// ═══════════════════════════════════════════════════════════
+let SAMPLE_DATA = [];
+
+// 当前数据集（可被 iFinD 导入覆盖）
+let DATA = [];
+let _isImportedData = false;
+let _dataLoaded = false;
+
+async function loadData() {
+  const badge = document.getElementById('data-badge');
+  badge.textContent = '⏳ 加载数据中…';
+  badge.className = 'datasource-badge badge-sample';
+  try {
+    const resp = await fetch('data.json');
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    SAMPLE_DATA = await resp.json();
+    DATA = [...SAMPLE_DATA];
+    _dataLoaded = true;
+    badge.textContent = '✅ iFinD 数据（' + DATA.length + ' 条）';
+    badge.className = 'datasource-badge badge-ifind';
+    initDropdowns();
+    applyFilters();
+  } catch(e) {
+    badge.textContent = '❌ 数据加载失败';
+    console.error('加载 data.json 失败:', e);
+    alert('数据加载失败，请确保 data.json 与本页面在同一目录下。\n\n错误: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════════════════
+const CAP_TIERS = ["50亿以下","50–100亿","100–200亿","200–500亿","500–1000亿","1000–5000亿","5000亿以上"];
+const AGE_TIERS = ["35岁以下","35–40岁","40–45岁","45–50岁","50–55岁","55–60岁","60岁以上"];
+
+const EXCHANGE_IDS = {
+  "A股主板":  "ex-am",
+  "A股科创板":"ex-as",
+  "A股创业板":"ex-ag",
+  "A股北交所":"ex-bj",
+  "美股":     "ex-us",
+  "港股":     "ex-hk"
+};
+
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+let filtered = [...DATA];
+let sortCol  = null, sortDir = 'asc';
+let page = 1;
+const PAGE = 25;
+let saved = [];
+let _pendingData = null;
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+function capTier(v){
+  if(v===null||v===undefined) return null;
+  if(v<50)   return "50亿以下";
+  if(v<100)  return "50–100亿";
+  if(v<200)  return "100–200亿";
+  if(v<500)  return "200–500亿";
+  if(v<1000) return "500–1000亿";
+  if(v<5000) return "1000–5000亿";
+  return "5000亿以上";
+}
+function ageTier(a){
+  if(a===null||a===undefined) return null;
+  if(a<35) return "35岁以下";
+  if(a<40) return "35–40岁";
+  if(a<45) return "40–45岁";
+  if(a<50) return "45–50岁";
+  if(a<55) return "50–55岁";
+  if(a<60) return "55–60岁";
+  return "60岁以上";
+}
+function fmtCap(v,c){
+  if(v===null||v===undefined) return '<span class="dash">—</span>';
+  const sym={CNY:"¥",USD:"$",HKD:"HK$"}[c]||"";
+  return sym+v.toLocaleString()+"亿";
+}
+function exTag(ex){
+  let cls;
+  if(ex==="A股北交所") cls="tag-bj";
+  else if(ex.startsWith("A股")) cls="tag-a";
+  else if(ex==="美股") cls="tag-us";
+  else cls="tag-hk";
+  return `<span class="tag ${cls}">${ex}</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DROPDOWN INIT & REBUILD
+// ═══════════════════════════════════════════════════════════
+function buildDD(ddId, items, key){
+  const dd=document.getElementById(ddId);
+  items.forEach(opt=>{
+    const div=document.createElement('div');
+    div.className='ms-opt';
+    div.innerHTML=`<input type="checkbox" data-key="${key}" value="${opt}" onchange="applyFilters()"><span>${opt}</span>`;
+    div.addEventListener('click',e=>{
+      if(e.target.tagName!=='INPUT'){
+        const cb=div.querySelector('input');
+        cb.checked=!cb.checked;
+        applyFilters();
+      }
+    });
+    dd.appendChild(div);
+  });
+}
+
+function initDropdowns(){
+  const industries = [...new Set(DATA.map(d=>d.industry).filter(Boolean))].sort();
+  const regLocs    = [...new Set(DATA.map(d=>d.registrationLoc).filter(Boolean))].sort();
+  const listingYrs = [...new Set(DATA.map(d=>d.listingYear).filter(Boolean))].sort((a,b)=>a-b);
+  buildDD('dd-ind', industries, 'ind');
+  buildDD('dd-cap', CAP_TIERS, 'cap');
+  buildDD('dd-reg', regLocs, 'reg');
+  buildDD('dd-yr',  listingYrs.map(String), 'yr');
+  buildDD('dd-age', AGE_TIERS, 'age');
+}
+
+function rebuildDropdowns(){
+  function clearRebuild(ddId, items, key){
+    const dd = document.getElementById(ddId);
+    [...dd.querySelectorAll('.ms-opt')].forEach(el=>el.remove());
+    buildDD(ddId, items, key);
+  }
+  const industries = [...new Set(DATA.map(d=>d.industry).filter(Boolean))].sort();
+  const regLocs    = [...new Set(DATA.map(d=>d.registrationLoc).filter(Boolean))].sort();
+  const listingYrs = [...new Set(DATA.map(d=>d.listingYear).filter(Boolean))].sort((a,b)=>a-b);
+  clearRebuild('dd-ind', industries, 'ind');
+  clearRebuild('dd-reg', regLocs, 'reg');
+  clearRebuild('dd-yr', listingYrs.map(String), 'yr');
+}
+
+function toggleDD(ddId, btnId){
+  const dd=document.getElementById(ddId);
+  const isOpen=dd.classList.contains('show');
+  closeAllDD();
+  if(!isOpen){
+    dd.classList.add('show');
+    document.getElementById(btnId).classList.add('open');
+  }
+}
+
+function closeAllDD(){
+  ['dd-ind','dd-cap','dd-reg','dd-yr','dd-age'].forEach(id=>{
+    document.getElementById(id).classList.remove('show');
+  });
+  ['btn-ind','btn-cap','btn-reg','btn-yr','btn-age'].forEach(id=>{
+    document.getElementById(id).classList.remove('open');
+  });
+}
+
+function selectAll(key){
+  const dd=document.getElementById('dd-'+key);
+  const cbs=[...dd.querySelectorAll(`input[data-key="${key}"]`)];
+  const allOn=cbs.every(c=>c.checked);
+  cbs.forEach(c=>c.checked=!allOn);
+  applyFilters();
+}
+
+function getChecked(key){
+  return [...document.querySelectorAll(`#dd-${key} input[data-key="${key}"]:checked`)].map(c=>c.value);
+}
+
+function updateLabel(key, def){
+  const sel=getChecked(key);
+  document.getElementById('lbl-'+key).textContent=sel.length?`已选 ${sel.length} 项`:def;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FILTER
+// ═══════════════════════════════════════════════════════════
+function applyFilters(){
+  const co  = document.getElementById('f-company').value.trim().toLowerCase();
+  const pos = document.getElementById('f-pos').value.trim().toLowerCase();
+  const srv = document.querySelector('input[name=srv]:checked').value;
+  const gdr = document.querySelector('input[name=gdr]:checked').value;
+  const cpa = document.getElementById('f-cpa').checked;
+  const ib  = document.getElementById('f-ib').checked;
+
+  const exs  = Object.keys(EXCHANGE_IDS).filter(k=>document.getElementById(EXCHANGE_IDS[k]).checked);
+  const inds = getChecked('ind');
+  const caps = getChecked('cap');
+  const regs = getChecked('reg');
+  const yrs  = getChecked('yr').map(Number);
+  const ages = getChecked('age');
+
+  updateLabel('ind','全部行业');
+  updateLabel('cap','全部市值');
+  updateLabel('reg','全部地区');
+  updateLabel('yr', '全部年份');
+  updateLabel('age','全部年龄');
+
+  filtered = DATA.filter(d=>{
+    if(co  && !d.companyName.toLowerCase().includes(co))  return false;
+    if(pos && !d.position.toLowerCase().includes(pos))     return false;
+    if(exs.length  && !exs.includes(d.exchange))           return false;
+    if(inds.length && !inds.includes(d.industry))          return false;
+    if(caps.length){
+      const t=capTier(d.marketCapValue);
+      if(!t||!caps.includes(t)) return false;
+    }
+    if(regs.length && !regs.includes(d.registrationLoc))   return false;
+    if(yrs.length  && !yrs.includes(d.listingYear))        return false;
+    if(ages.length){
+      const t=ageTier(d.age);
+      if(!t||!ages.includes(t)) return false;
+    }
+    if(srv==='yes' && !d.isIPOServing) return false;
+    if(srv==='no'  &&  d.isIPOServing) return false;
+    if(gdr!=='all' && d.gender!==gdr) return false;
+    if(cpa && !d.hasCPA) return false;
+    if(ib  && !d.hasIB)  return false;
+    return true;
+  });
+
+  page=1;
+  if(sortCol) sortData(false);
+  renderStats();
+  renderTable();
+}
+
+function resetAll(){
+  document.getElementById('f-company').value='';
+  document.getElementById('f-pos').value='';
+  document.getElementById('s-all').checked=true;
+  document.getElementById('g-all').checked=true;
+  document.getElementById('f-cpa').checked=false;
+  document.getElementById('f-ib').checked=false;
+  Object.values(EXCHANGE_IDS).forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=false; });
+  ['ind','cap','reg','yr','age'].forEach(k=>{
+    document.querySelectorAll(`#dd-${k} input[data-key="${k}"]`).forEach(c=>c.checked=false);
+    const defs={ind:'全部行业',cap:'全部市值',reg:'全部地区',yr:'全部年份',age:'全部年龄'};
+    document.getElementById('lbl-'+k).textContent=defs[k];
+  });
+  sortCol=null; sortDir='asc';
+  document.querySelectorAll('.sa').forEach(e=>e.textContent='');
+  filtered=[...DATA];
+  page=1;
+  renderStats();
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  STATS
+// ═══════════════════════════════════════════════════════════
+function renderStats(){
+  document.getElementById('st-count').textContent=filtered.length;
+  document.getElementById('st-co').textContent=new Set(filtered.map(d=>d.companyName)).size;
+  const pct=filtered.length?Math.round(filtered.filter(d=>d.isIPOServing).length/filtered.length*100):0;
+  document.getElementById('st-active').textContent=pct+'%';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SORT
+// ═══════════════════════════════════════════════════════════
+function doSort(col){
+  if(sortCol===col) sortDir=sortDir==='asc'?'desc':'asc';
+  else{ sortCol=col; sortDir='asc'; }
+  syncSortUI();
+  sortData();
+  renderTable();
+}
+
+function onSortChange(){
+  const sel=document.getElementById('sort-col-sel');
+  sortCol=sel.value;
+  sortDir='asc';
+  syncSortUI();
+  sortData();
+  renderTable();
+}
+
+function onSortDirToggle(){
+  if(!sortCol) return;
+  sortDir=sortDir==='asc'?'desc':'asc';
+  syncSortUI();
+  sortData();
+  renderTable();
+}
+
+function syncSortUI(){
+  const sel=document.getElementById('sort-col-sel');
+  if(sel) sel.value=sortCol||'';
+  const btn=document.getElementById('sort-dir-btn');
+  if(btn){
+    btn.textContent=sortDir==='asc'?'↑':'↓';
+    btn.style.color=sortCol?'#0f2744':'#bbb';
+    btn.style.borderColor=sortCol?'#0f2744':'#ddd';
+  }
+  document.querySelectorAll('.sa').forEach(e=>e.textContent='');
+  document.querySelectorAll('thead th').forEach(e=>e.classList.remove('sorted'));
+  if(sortCol){
+    const arrowEl=document.getElementById('sa-'+sortCol);
+    if(arrowEl){ arrowEl.textContent=sortDir==='asc'?' ▲':' ▼'; arrowEl.closest('th').classList.add('sorted'); }
+  }
+}
+
+function sortData(){
+  if(!sortCol){ return; }
+  filtered.sort((a,b)=>{
+    let av=a[sortCol], bv=b[sortCol];
+    if(av===null||av===undefined) av = sortDir==='asc' ? Infinity : -Infinity;
+    if(bv===null||bv===undefined) bv = sortDir==='asc' ? Infinity : -Infinity;
+    if(sortCol==='isIPOServing'){av=av?1:0; bv=bv?1:0;}
+    if(typeof av==='string') av=av.toLowerCase();
+    if(typeof bv==='string') bv=bv.toLowerCase();
+    const c=av<bv?-1:av>bv?1:0;
+    return sortDir==='asc'?c:-c;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TABLE
+// ═══════════════════════════════════════════════════════════
+function renderTable(){
+  const total=filtered.length;
+  const pages=Math.max(1,Math.ceil(total/PAGE));
+  page=Math.min(page,pages);
+  const s=(page-1)*PAGE, e=Math.min(s+PAGE,total);
+  const slice=filtered.slice(s,e);
+
+  document.getElementById('pg-summary').textContent=total?`共 ${total} 条，显示第 ${s+1}–${e} 条`:'';
+
+  const tbody=document.getElementById('tbody');
+  if(!slice.length){
+    tbody.innerHTML=`<tr><td colspan="12"><div class="empty"><div class="ico">🔍</div><p>没有符合条件的候选人，请调整筛选条件</p></div></td></tr>`;
+    renderPagination(0,0); return;
+  }
+
+  tbody.innerHTML=slice.map((d,i)=>`
+    <tr>
+      <td><span class="tag tag-ind">${d.industry||'—'}</span></td>
+      <td><strong>${d.stockCode}</strong></td>
+      <td>${d.companyName}</td>
+      <td>${exTag(d.exchange)}</td>
+      <td>${d.listingYear||'—'}</td>
+      <td style="white-space:nowrap">${fmtCap(d.marketCapValue,d.marketCapCurrency)}</td>
+      <td><strong>${d.name}</strong></td>
+      <td>${d.location||'—'}</td>
+      <td>${d.position}</td>
+      <td style="max-width:220px;white-space:normal;font-size:12px;color:#555;line-height:1.5">${d.background||'—'}</td>
+      <td>${d.linkedin?`<a href="${d.linkedin}" target="_blank" class="linkedin-link">🔗 查看</a>`:`<span class="dash">—</span>`}</td>
+      <td><button class="btn-detail" onclick="openDrawer(filtered[${s+i}])">查看详情</button></td>
+    </tr>`).join('');
+
+  renderPagination(page,pages);
+  document.getElementById('pg-info').textContent=`第 ${page} / ${pages} 页`;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DETAIL DRAWER
+// ═══════════════════════════════════════════════════════════
+function openDrawer(d){
+  if(!d) return;
+  document.getElementById('d-name').textContent = d.name;
+  document.getElementById('d-pos').textContent  = d.position;
+  document.getElementById('d-co').textContent   = d.companyName + '　' + d.exchange;
+
+  const body = document.getElementById('d-body');
+  const ipo  = d.isIPOServing ? '✅ 上市时在任' : '🕐 上市后加入';
+  const cpa  = d.hasCPA ? '✅ 有' : '—';
+  const ib   = d.hasIB  ? '✅ 有' : '—';
+  const capStr = d.marketCapValue!=null ? fmtCap(d.marketCapValue, d.marketCapCurrency) : '—';
+
+  const eduHtml = (d.education||[]).filter(e=>e.school||e.degree).map(e=>`
+    <div class="edu-row">
+      <div class="edu-icon">🎓</div>
+      <div class="edu-text">
+        ${e.school?`<div class="edu-school">${e.school}</div>`:''}
+        <div class="edu-sub">${[e.degree,e.major,e.year?e.year+'年毕业':''].filter(Boolean).join(' · ')}</div>
+      </div>
+    </div>`).join('');
+
+  const careerHtml = (d.careerItems||[]).map((c,idx,arr)=>`
+    <div class="career-item">
+      <div class="tl-col">
+        <div class="tl-dot"></div>
+        ${idx < arr.length-1 ? '<div class="tl-line"></div>' : ''}
+      </div>
+      <div class="career-body">
+        <div class="c-period">${c.period}</div>
+        <div class="c-role">${c.role}</div>
+        <div class="c-co">${c.company}</div>
+        ${c.detail?`<div class="c-detail">${c.detail}</div>`:''}
+      </div>
+    </div>`).join('');
+
+  const hlHtml = (d.highlights||[]).map(h=>`
+    <div class="hl-item"><span class="hl-dot">▸</span><span>${h}</span></div>`).join('');
+
+  const liHtml = d.linkedin
+    ? `<a href="${d.linkedin}" target="_blank" class="linkedin-link" style="font-size:13px;">🔗 查看 LinkedIn 主页</a>`
+    : `<span style="color:#bbb;font-size:12px;">暂无 LinkedIn 链接</span>`;
+
+  const ageTxt = d.age!=null ? d.age+' 岁' : '—';
+  const genderTxt = d.gender || '—';
+  const yearTxt = d.listingYear ? d.listingYear+' 年' : '—';
+
+  body.innerHTML = `
+    <div class="drawer-sec">
+      <div class="drawer-sec-title">基本信息</div>
+      <div class="info-grid">
+        <div class="info-cell"><div class="lbl">行业</div><div class="val">${d.industry||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">证券代码</div><div class="val">${d.stockCode}</div></div>
+        <div class="info-cell"><div class="lbl">上市板块</div><div class="val">${d.exchange}</div></div>
+        <div class="info-cell"><div class="lbl">上市年份</div><div class="val">${yearTxt}</div></div>
+        <div class="info-cell"><div class="lbl">市值</div><div class="val">${capStr}</div></div>
+        <div class="info-cell"><div class="lbl">注册地</div><div class="val">${d.registrationLoc||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">年龄</div><div class="val">${ageTxt}</div></div>
+        <div class="info-cell"><div class="lbl">性别</div><div class="val">${genderTxt}</div></div>
+        <div class="info-cell"><div class="lbl">是否上市时在任</div><div class="val">${ipo}</div></div>
+        <div class="info-cell"><div class="lbl">所在城市</div><div class="val">${d.location||'—'}</div></div>
+      </div>
+      <div class="d-tags" style="margin-top:12px;">
+        ${d.hasCPA ? '<span class="d-tag">🏛️ 会计师事务所经验</span>' : ''}
+        ${d.hasIB  ? '<span class="d-tag">📈 投行/券商经验</span>'   : ''}
+      </div>
+    </div>
+    ${eduHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">教育背景</div>${eduHtml}</div>` : ''}
+    ${careerHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">工作经历</div>${careerHtml}</div>` : ''}
+    ${hlHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">主要亮点</div>${hlHtml}</div>` : ''}
+    <div class="drawer-sec">
+      <div class="drawer-sec-title">LinkedIn</div>
+      ${liHtml}
+    </div>
+  `;
+
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('detail-drawer').classList.add('open');
+}
+
+function closeDrawer(){
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('detail-drawer').classList.remove('open');
+}
+
+function renderPagination(cur,total){
+  const el=document.getElementById('pg-btns');
+  if(total<=1){el.innerHTML='';return;}
+  const range=[];
+  for(let i=1;i<=total;i++){
+    if(i===1||i===total||(i>=cur-2&&i<=cur+2)) range.push(i);
+    else if(range[range.length-1]!=='…') range.push('…');
+  }
+  el.innerHTML=
+    `<button class="pg" onclick="goPage(${cur-1})" ${cur===1?'disabled':''}>‹</button>`+
+    range.map(p=>p==='…'
+      ?`<button class="pg ellipsis">…</button>`
+      :`<button class="pg ${p===cur?'cur':''}" onclick="goPage(${p})">${p}</button>`
+    ).join('')+
+    `<button class="pg" onclick="goPage(${cur+1})" ${cur===total?'disabled':''}>›</button>`;
+}
+
+function goPage(p){page=p;renderTable();document.querySelector('.content').scrollTop=0;}
+
+// ═══════════════════════════════════════════════════════════
+//  EXPORT
+// ═══════════════════════════════════════════════════════════
+function exportExcel(){
+  if(!filtered.length){alert('当前没有数据可导出');return;}
+  const hdr=['行业','证券代码','公司名','上市板块','上市时间','市值（亿）','市值货币',
+             '注册地','姓名','地点','职位','人选背景','LinkedIn',
+             '是否上市时在任','年龄','性别','会计师事务所经验','投行/券商经验'];
+  const rows=filtered.map(d=>[
+    d.industry||'', d.stockCode, d.companyName, d.exchange,
+    d.listingYear||'',
+    d.marketCapValue!=null?d.marketCapValue:'',
+    d.marketCapCurrency||'', d.registrationLoc||'',
+    d.name, d.location||'', d.position, d.background||'', d.linkedin||'',
+    d.isIPOServing?'是（上市时在任）':'否（上市后加入）',
+    d.age!=null?d.age:'', d.gender||'',
+    d.hasCPA?'是':'否', d.hasIB?'是':'否'
+  ]);
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([hdr,...rows]);
+  ws['!cols']=[8,10,14,10,8,10,8,10,10,8,12,36,30,8,6,6,12,12].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb,ws,'搜索结果');
+  XLSX.writeFile(wb,`高管搜索_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SAVE / LOAD CONDITIONS
+// ═══════════════════════════════════════════════════════════
+function getState(){
+  return {
+    co:  document.getElementById('f-company').value,
+    pos: document.getElementById('f-pos').value,
+    srv: document.querySelector('input[name=srv]:checked').value,
+    gdr: document.querySelector('input[name=gdr]:checked').value,
+    cpa: document.getElementById('f-cpa').checked,
+    ib:  document.getElementById('f-ib').checked,
+    exs: Object.keys(EXCHANGE_IDS).filter(k=>{ const el=document.getElementById(EXCHANGE_IDS[k]); return el&&el.checked; }),
+    ind: getChecked('ind'), cap: getChecked('cap'),
+    reg: getChecked('reg'), yr:  getChecked('yr'), age: getChecked('age')
+  };
+}
+
+function loadState(s){
+  document.getElementById('f-company').value=s.co;
+  document.getElementById('f-pos').value=s.pos;
+  document.querySelectorAll('input[name=srv]').forEach(r=>r.checked=r.value===s.srv);
+  document.querySelectorAll('input[name=gdr]').forEach(r=>r.checked=r.value===s.gdr);
+  document.getElementById('f-cpa').checked=s.cpa;
+  document.getElementById('f-ib').checked=s.ib;
+  Object.keys(EXCHANGE_IDS).forEach(k=>{ const el=document.getElementById(EXCHANGE_IDS[k]); if(el) el.checked=s.exs.includes(k); });
+  const MAP={ind:s.ind,cap:s.cap,reg:s.reg,yr:s.yr,age:s.age};
+  Object.keys(MAP).forEach(key=>{
+    document.querySelectorAll(`#dd-${key} input[data-key="${key}"]`).forEach(c=>c.checked=MAP[key].includes(c.value));
+  });
+  applyFilters();
+}
+
+function openSaveModal(){ document.getElementById('overlay').classList.add('show'); document.getElementById('save-name').value=''; document.getElementById('save-name').focus(); }
+function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
+
+function saveCondition(){
+  const n=document.getElementById('save-name').value.trim();
+  if(!n){alert('请输入名称');return;}
+  saved.push({id:Date.now(),name:n,state:getState()});
+  renderSaved();
+  closeModal();
+}
+
+function renderSaved(){
+  const el=document.getElementById('saved-list');
+  if(!saved.length){el.innerHTML='<span class="no-saved">暂无已保存的搜索条件</span>';return;}
+  el.innerHTML=saved.map(s=>`
+    <div class="saved-chip">
+      <span class="saved-chip-name">📌 ${s.name}</span>
+      <span class="saved-chip-load" onclick="loadSaved(${s.id})">加载</span>
+      <span class="saved-chip-del" onclick="delSaved(${s.id})" title="删除">✕</span>
+    </div>`).join('');
+}
+
+function loadSaved(id){ const s=saved.find(x=>x.id===id); if(s) loadState(s.state); }
+function delSaved(id){ saved=saved.filter(x=>x.id!==id); renderSaved(); }
+
+// ═══════════════════════════════════════════════════════════
+//  iFIND DATA IMPORT
+// ═══════════════════════════════════════════════════════════
+
+/**
+ * 触发：用户选择文件后
+ */
+function handleFileUpload(input){
+  const file = input.files[0];
+  if(!file) return;
+  input.value = ''; // 重置，允许再次导入同一文件
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const result = parseIFinDWorkbook(wb);
+      _pendingData = result.rows;
+      showImportModal(result);
+    } catch(err) {
+      alert('文件解析失败：' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/**
+ * 规范化上市板块名称
+ */
+function normalizeExchange(raw, stockCode){
+  const r = String(raw||'').trim();
+  if(r.includes('科创')) return 'A股科创板';
+  if(r.includes('创业')) return 'A股创业板';
+  if(r.includes('北证') || r.includes('北交') || stockCode.toUpperCase().endsWith('.BJ')) return 'A股北交所';
+  if(r.includes('沪') || r.includes('上交') || r.includes('深') || r.includes('主板')) return 'A股主板';
+  // 通过股票代码后缀推断
+  const uc = stockCode.toUpperCase();
+  if(uc.endsWith('.BJ')) return 'A股北交所';
+  if(uc.endsWith('.SH')){
+    const num = parseInt(stockCode);
+    if(num>=688000 && num<=688999) return 'A股科创板';
+    return 'A股主板';
+  }
+  if(uc.endsWith('.SZ')){
+    const num = parseInt(stockCode);
+    if(num>=300000 && num<=301999) return 'A股创业板';
+    return 'A股主板';
+  }
+  return 'A股主板';
+}
+
+/**
+ * 解析日期字符串，提取年份
+ * iFinD 常见格式：20180611、2018-06-11、2018/06/11、JS Date 对象
+ */
+function parseYear(v){
+  if(!v) return null;
+  if(v instanceof Date) return v.getFullYear();
+  const s = String(v).trim();
+  if(/^\d{8}$/.test(s)) return parseInt(s.substring(0,4));
+  const m = s.match(/^(\d{4})/);
+  return m ? parseInt(m[1]) : null;
+}
+
+/**
+ * 按分号/全角分号切分字符串
+ */
+function splitSemi(v){
+  if(!v && v!==0) return [];
+  return String(v).split(/[;；]/).map(s=>s.trim()).filter(Boolean);
+}
+
+/**
+ * 规范化性别
+ */
+function normalizeGender(g){
+  const s = String(g||'').trim();
+  if(s==='男') return '男';
+  if(s==='女') return '女';
+  return '';
+}
+
+/**
+ * 在数据行中找股票代码列：优先检查第一列是否匹配，再全列搜索
+ * 支持格式：600519.SH / 300750.SZ / 430047.BJ
+ */
+function extractStockCode(row){
+  const keys = Object.keys(row);
+  for(const k of keys){
+    const v = String(row[k]||'').trim();
+    if(/^\d{6}\.(SH|SZ|BJ)$/i.test(v)) return v.toUpperCase();
+  }
+  // 纯6位数字也算（无后缀时）
+  for(const k of keys){
+    const v = String(row[k]||'').trim();
+    if(/^\d{6}$/.test(v)) return v;
+  }
+  return '';
+}
+
+/**
+ * 解析 iFinD 导出的 Excel 工作簿
+ * 支持：单 sheet（基本+高管合并）或 双 sheet（sheet1=基本信息，sheet2=高管信息）
+ */
+function parseIFinDWorkbook(wb){
+  const sheets = wb.SheetNames.map(name=>{
+    const ws = wb.Sheets[name];
+    const data = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false});
+    if(!data.length) return {name, data:[], hasBasic:false, hasMgmt:false};
+    const keys = Object.keys(data[0]).join('|');
+    const hasBasic = /公司中文名称|上市板块|首发上市日期/.test(keys);
+    const hasMgmt  = /财务总监|高管姓名|总经理/.test(keys);
+    return {name, data, hasBasic, hasMgmt};
+  }).filter(s=>s.data.length);
+
+  if(!sheets.length) throw new Error('Excel 文件为空或格式不正确');
+
+  let basicData = null, mgmtData = null;
+
+  // 先看有没有同时含两类字段的 sheet（合并导出）
+  const combined = sheets.find(s=>s.hasBasic && s.hasMgmt);
+  if(combined){
+    basicData = combined.data;
+    mgmtData  = combined.data;
+  } else {
+    // 分别找
+    const bSheet = sheets.find(s=>s.hasBasic);
+    const mSheet = sheets.find(s=>s.hasMgmt);
+    if(!bSheet && !mSheet) throw new Error('未识别到 iFinD 数据字段，请确认文件包含"基本信息"和/或"高管信息"列。');
+    basicData = bSheet ? bSheet.data : null;
+    mgmtData  = mSheet ? mSheet.data : null;
+  }
+
+  // 以股票代码为 key 建立 map
+  const basicMap = {}, mgmtMap = {};
+  if(basicData) basicData.forEach(r=>{ const c=extractStockCode(r); if(c) basicMap[c]=r; });
+  if(mgmtData)  mgmtData.forEach(r=>{  const c=extractStockCode(r); if(c) mgmtMap[c]=r;  });
+
+  const allCodes = [...new Set([...Object.keys(basicMap), ...Object.keys(mgmtMap)])];
+  if(!allCodes.length) throw new Error('未能从数据中提取到股票代码，请确认文件第一列为"证券代码"（格式如 600519.SH）');
+
+  const rows = [];
+  allCodes.forEach(code=>{
+    const basic = basicMap[code] || {};
+    const mgmt  = mgmtMap[code]  || {};
+    rows.push(...buildPersonRows(code, basic, mgmt));
+  });
+
+  return { rows, companies: allCodes.length, sheets: sheets.map(s=>s.name) };
+}
+
+/**
+ * 对单家公司，生成高管人员行列表
+ */
+function buildPersonRows(stockCode, basic, mgmt){
+  // 从 basic 提取公司信息
+  const companyName    = basic['公司中文名称'] || '';
+  if(!companyName && !mgmt['高管姓名(现任)']) return []; // 完全没有数据则跳过
+
+  const exchRaw        = basic['上市板块'] || basic['上市交易所'] || '';
+  const exchange       = normalizeExchange(exchRaw, stockCode);
+  const listingYear    = parseYear(basic['首发上市日期']);
+  const industry       = basic['所属同花顺行业'] || basic['所属新证监会行业'] || '';
+  const registrationLoc= basic['地级市'] || '';
+  const displayCode    = stockCode.replace(/\.(SH|SZ|BJ)$/i, '');
+
+  // 从 mgmt 提取高管并行数组
+  const nameList   = splitSemi(mgmt['高管姓名(现任)']);
+  const genderList = splitSemi(mgmt['高管性别(现任)']);
+  const birthYrList= splitSemi(mgmt['出生年份(现任)']);
+  const eduList    = splitSemi(mgmt['高管学历(现任)']);
+
+  function getAttr(name){
+    const idx = nameList.indexOf(name);
+    if(idx < 0) return { gender:'', birthYear:0, education:'' };
+    return {
+      gender:    normalizeGender(genderList[idx]),
+      birthYear: parseInt(birthYrList[idx]) || 0,
+      education: eduList[idx] || ''
+    };
+  }
+
+  const curYear = new Date().getFullYear();
+  const rows = [];
+  const seen = new Set(); // 同一家公司内去重（避免一人身兼多职重复出现）
+
+  // 需要提取的职位字段
+  const posFields = [
+    { field:'财务总监(现任)',   position:'财务总监',   multi:false },
+    { field:'总经理(现任)',     position:'总经理',     multi:false },
+    { field:'董事会秘书(现任)', position:'董事会秘书', multi:false },
+    { field:'副总经理(现任)',   position:'副总经理',   multi:true  },
+  ];
+
+  posFields.forEach(({field, position, multi})=>{
+    const raw   = mgmt[field] || '';
+    const names = multi ? splitSemi(raw) : (raw.trim() ? [raw.trim()] : []);
+    names.forEach(name=>{
+      name = name.trim();
+      if(!name || seen.has(name)) return;
+      seen.add(name);
+
+      const attr = getAttr(name);
+      const age  = attr.birthYear ? curYear - attr.birthYear : null;
+
+      rows.push({
+        industry:       industry || '—',
+        stockCode:      displayCode,
+        companyName:    companyName || displayCode,
+        exchange,
+        listingYear,
+        marketCapValue: null,        // iFinD 基本信息查询不含实时市值
+        marketCapCurrency: 'CNY',
+        registrationLoc,
+        name,
+        location:       registrationLoc,
+        position,
+        background:     attr.education || '',
+        linkedin:       '',
+        isIPOServing:   false,       // 无法从静态数据判断
+        age,
+        gender:         attr.gender || '',
+        hasCPA:         false,
+        hasIB:          false,
+        education: attr.education
+          ? [{ school:'', degree:attr.education, major:'', year:'' }]
+          : [],
+        careerItems: [],
+        highlights:  []
+      });
+    });
+  });
+
+  return rows;
+}
+
+/**
+ * 显示导入预览弹窗
+ */
+function showImportModal(result){
+  const body = document.getElementById('import-body');
+  const confirmBtn = document.getElementById('import-confirm-btn');
+
+  if(!result.rows.length){
+    body.innerHTML = `
+      <div class="import-err">⚠️ 未能从文件中提取到有效的高管记录。<br>
+      请确认：①Excel 含"财务总监(现任)"/"总经理(现任)"等列；②第一列为证券代码（如 600519.SH）。</div>`;
+    confirmBtn.disabled = true;
+  } else {
+    const noCompany = result.rows.filter(r=>!r.companyName||r.companyName===r.stockCode).length;
+    const warnHtml = noCompany
+      ? `<div class="import-warn">⚠️ 有 ${noCompany} 条记录未匹配到公司名称（可能缺少基本信息 sheet）。</div>`
+      : '';
+
+    const sample = result.rows.slice(0, 6);
+    body.innerHTML = `
+      <div class="import-info">解析完成，发现以下数据：</div>
+      <div class="import-stats">
+        <div class="import-stat">
+          <div class="is-num">${result.companies}</div>
+          <div class="is-lbl">家公司</div>
+        </div>
+        <div class="import-stat">
+          <div class="is-num">${result.rows.length}</div>
+          <div class="is-lbl">条高管记录</div>
+        </div>
+        <div class="import-stat">
+          <div class="is-num">${result.sheets.length}</div>
+          <div class="is-lbl">个工作表</div>
+        </div>
+      </div>
+      ${warnHtml}
+      <div class="import-preview">
+        <table>
+          <tr>
+            <th>证券代码</th><th>公司名称</th><th>姓名</th><th>职位</th><th>板块</th><th>年龄</th>
+          </tr>
+          ${sample.map(r=>`<tr>
+            <td>${r.stockCode}</td>
+            <td>${r.companyName}</td>
+            <td>${r.name}</td>
+            <td>${r.position}</td>
+            <td>${r.exchange}</td>
+            <td>${r.age!=null?r.age:'—'}</td>
+          </tr>`).join('')}
+          ${result.rows.length>6
+            ? `<tr><td colspan="6" style="text-align:center;color:#aaa;padding:6px;">…还有 ${result.rows.length-6} 条记录</td></tr>`
+            : ''}
+        </table>
+      </div>
+      <div style="font-size:12px;color:#888;">导入后将替换当前数据集，已保存的搜索条件不受影响。</div>`;
+    confirmBtn.disabled = false;
+  }
+
+  document.getElementById('import-overlay').classList.add('show');
+}
+
+function cancelImport(){
+  _pendingData = null;
+  document.getElementById('import-overlay').classList.remove('show');
+}
+
+function confirmImport(){
+  if(!_pendingData || !_pendingData.length){ alert('没有可导入的数据'); return; }
+
+  DATA = _pendingData;
+  _pendingData = null;
+  _isImportedData = true;
+
+  document.getElementById('import-overlay').classList.remove('show');
+
+  // 更新数据来源标记
+  const badge = document.getElementById('data-badge');
+  badge.textContent = '✅ iFinD 数据';
+  badge.className = 'datasource-badge badge-ifind';
+
+  // 重建动态下拉框
+  rebuildDropdowns();
+  // 重置所有筛选条件并刷新
+  resetAll();
+
+  showToast(`✅ 成功导入 ${DATA.length} 条高管记录，涉及 ${new Set(DATA.map(d=>d.companyName)).size} 家公司`);
+}
+
+/**
+ * 底部 Toast 通知
+ */
+function showToast(msg){
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(()=>{ toast.style.opacity='0'; }, 3500);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  EVENT LISTENERS
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('click', e=>{
+  const inside=['dd-ind','dd-cap','dd-reg','dd-yr','dd-age',
+                'btn-ind','btn-cap','btn-reg','btn-yr','btn-age'];
+  if(!inside.some(id=>{ const el=document.getElementById(id); return el&&el.contains(e.target); }))
+    closeAllDD();
+});
+
+document.getElementById('overlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('overlay')) closeModal();
+});
+document.getElementById('import-overlay').addEventListener('click', e=>{
+  if(e.target===document.getElementById('import-overlay')) cancelImport();
+});
+document.getElementById('save-name').addEventListener('keydown', e=>{
+  if(e.key==='Enter') saveCondition();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+loadData();
+</script>
+</body>
+</html>

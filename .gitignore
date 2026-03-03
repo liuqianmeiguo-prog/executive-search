@@ -1,0 +1,9 @@
+__pycache__/
+*.backup_*.html
+preview.png
+同花顺/
+安装/
+*.pyc
+test_*.py
+update_data.py
+上市公司高管信息搜索器产品需求.docx
