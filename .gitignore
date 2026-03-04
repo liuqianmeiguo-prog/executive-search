@@ -5,5 +5,5 @@ preview.png
 安装/
 *.pyc
 test_*.py
-update_data.py
+.env
 上市公司高管信息搜索器产品需求.docx
