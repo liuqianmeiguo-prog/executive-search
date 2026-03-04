@@ -344,6 +344,19 @@ tbody td { padding: 9px 12px; vertical-align: middle; }
       </div>
     </div>
 
+    <!-- 学历 -->
+    <div class="filter-section">
+      <div class="filter-label">候选人学历（可多选）</div>
+      <div class="ms-wrap">
+        <button class="ms-btn" id="btn-edu" onclick="toggleDD('dd-edu','btn-edu')">
+          <span class="ms-text" id="lbl-edu">全部学历</span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-dropdown" id="dd-edu">
+          <div class="ms-sa" onclick="selectAll('edu')">全选 / 全不选</div>
+        </div>
+      </div>
+    </div>
+
     <!-- 性别 -->
     <div class="filter-section">
       <div class="filter-label">候选人性别</div>
@@ -535,6 +548,7 @@ async function loadData() {
 // ═══════════════════════════════════════════════════════════
 const CAP_TIERS = ["50亿以下","50–100亿","100–200亿","200–500亿","500–1000亿","1000–5000亿","5000亿以上"];
 const AGE_TIERS = ["35岁以下","35–40岁","40–45岁","45–50岁","50–55岁","55–60岁","60岁以上"];
+const EDU_TIERS = ["博士","硕士","本科","大专","中专","高中","初中","小学"];
 
 const EXCHANGE_IDS = {
   "A股主板":  "ex-am",
@@ -670,6 +684,7 @@ function initDropdowns(){
   buildDD('dd-reg', provinces, 'reg');
   buildDD('dd-yr',  listingYrs.map(String), 'yr');
   buildDD('dd-age', AGE_TIERS, 'age');
+  buildDD('dd-edu', EDU_TIERS, 'edu');
 }
 
 function rebuildDropdowns(){
@@ -697,10 +712,10 @@ function toggleDD(ddId, btnId){
 }
 
 function closeAllDD(){
-  ['dd-ind','dd-cap','dd-reg','dd-yr','dd-age'].forEach(id=>{
+  ['dd-ind','dd-cap','dd-reg','dd-yr','dd-age','dd-edu'].forEach(id=>{
     document.getElementById(id).classList.remove('show');
   });
-  ['btn-ind','btn-cap','btn-reg','btn-yr','btn-age'].forEach(id=>{
+  ['btn-ind','btn-cap','btn-reg','btn-yr','btn-age','btn-edu'].forEach(id=>{
     document.getElementById(id).classList.remove('open');
   });
 }
@@ -740,12 +755,14 @@ function applyFilters(){
   const regs = getChecked('reg');
   const yrs  = getChecked('yr').map(Number);
   const ages = getChecked('age');
+  const edus = getChecked('edu');
 
   updateLabel('ind','全部行业');
   updateLabel('cap','全部市值');
   updateLabel('reg','全部省份');
   updateLabel('yr', '全部年份');
   updateLabel('age','全部年龄');
+  updateLabel('edu','全部学历');
 
   filtered = DATA.filter(d=>{
     if(co  && !d.companyName.toLowerCase().includes(co))  return false;
@@ -763,6 +780,7 @@ function applyFilters(){
       const t=ageTier(d.age);
       if(!t||!ages.includes(t)) return false;
     }
+    if(edus.length && !edus.includes(d.background)) return false;
     if(srv==='yes' && !d.isIPOServing) return false;
     if(srv==='no'  &&  d.isIPOServing) return false;
     if(gdr!=='all' && d.gender!==gdr) return false;
@@ -1064,7 +1082,7 @@ function getState(){
     ib:  document.getElementById('f-ib').checked,
     exs: Object.keys(EXCHANGE_IDS).filter(k=>{ const el=document.getElementById(EXCHANGE_IDS[k]); return el&&el.checked; }),
     ind: getChecked('ind'), cap: getChecked('cap'),
-    reg: getChecked('reg'), yr:  getChecked('yr'), age: getChecked('age')
+    reg: getChecked('reg'), yr:  getChecked('yr'), age: getChecked('age'), edu: getChecked('edu')
   };
 }
 
@@ -1076,7 +1094,7 @@ function loadState(s){
   document.getElementById('f-cpa').checked=s.cpa;
   document.getElementById('f-ib').checked=s.ib;
   Object.keys(EXCHANGE_IDS).forEach(k=>{ const el=document.getElementById(EXCHANGE_IDS[k]); if(el) el.checked=s.exs.includes(k); });
-  const MAP={ind:s.ind,cap:s.cap,reg:s.reg,yr:s.yr,age:s.age};
+  const MAP={ind:s.ind,cap:s.cap,reg:s.reg,yr:s.yr,age:s.age,edu:s.edu||[]};
   Object.keys(MAP).forEach(key=>{
     document.querySelectorAll(`#dd-${key} input[data-key="${key}"]`).forEach(c=>c.checked=MAP[key].includes(c.value));
   });
@@ -1447,8 +1465,8 @@ function showToast(msg){
 //  EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('click', e=>{
-  const inside=['dd-ind','dd-cap','dd-reg','dd-yr','dd-age',
-                'btn-ind','btn-cap','btn-reg','btn-yr','btn-age'];
+  const inside=['dd-ind','dd-cap','dd-reg','dd-yr','dd-age','dd-edu',
+                'btn-ind','btn-cap','btn-reg','btn-yr','btn-age','btn-edu'];
   if(!inside.some(id=>{ const el=document.getElementById(id); return el&&el.contains(e.target); }))
     closeAllDD();
 });
