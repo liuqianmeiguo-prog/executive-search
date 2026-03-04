@@ -681,7 +681,7 @@ function ageTier(a){
   return "60岁以上";
 }
 function fmtCap(v,c){
-  if(v===null||v===undefined) return '<span class="dash">—</span>';
+  if(v===null||v===undefined||v===0) return '<span class="dash">—</span>';
   const sym={CNY:"¥",USD:"$",HKD:"HK$"}[c]||"";
   return sym+v.toLocaleString()+"亿";
 }

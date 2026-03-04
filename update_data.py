@@ -209,20 +209,55 @@ def fetch_all(codes: list, indicators: list, label: str) -> dict:
     return all_data
 
 
-def get_all_ashare_codes() -> list:
+def get_hk_codes() -> list:
     """
-    获取全量 A 股代码列表，按优先级尝试以下方法：
-    方法1：akshare（免费开源，实时更新，覆盖全市场）
-    方法2：从本地 codes.txt 文件读取（手动维护备用）
+    获取港股代码列表。
+    通过 iFinD API 扫描 0001-9999.HK 范围，筛选出有效代码。
     """
-    # ── 方法1：akshare 拉取全量 A 股 ────────────────────────────────
+    print("  → 扫描港股代码（0001-9999.HK）...")
+    url = f"{CONFIG['api_base']}/api/v1/basic_data_service"
+    all_valid = []
+
+    for start in range(1, 10000, 200):
+        end = min(start + 200, 10000)
+        codes = [f"{i:04d}.HK" for i in range(start, end)]
+        payload = {
+            "codes": ",".join(codes),
+            "indipara": [{"indicator": "ths_corp_cn_name_stock", "indiparams": [""]}],
+        }
+        try:
+            resp = _session.post(url, json=payload, timeout=30)
+            data = resp.json()
+            for t in data.get("tables", []):
+                name_list = t.get("table", {}).get("ths_corp_cn_name_stock", [])
+                name = name_list[0] if name_list else ""
+                if name and name not in ("--", "-", ""):
+                    all_valid.append(t["thscode"])
+        except Exception:
+            pass
+        if start % 2000 == 1:
+            print(f"    {start:04d}-{end-1:04d}... 已找到 {len(all_valid)} 只")
+        time.sleep(0.15)
+
+    print(f"  → 港股共 {len(all_valid)} 只")
+    return sorted(all_valid)
+
+
+def get_all_stock_codes() -> list:
+    """
+    获取全量股票代码列表（A股 + 港股），按优先级尝试以下方法：
+    A股：akshare → 本地 codes.txt
+    港股：iFinD API 扫描
+    """
+    result = []
+
+    # ── A 股（akshare）────────────────────────────────
     try:
         print("  → 尝试 akshare 拉取全量A股代码...")
         import akshare as ak
 
         # 沪深 A 股
-        df = ak.stock_info_a_code_name()   # 返回 DataFrame，含 code / name 列
-        result = []
+        df = ak.stock_info_a_code_name()
         if df is not None and not df.empty:
             code_col = df.columns[0]
             raw_codes = df[code_col].astype(str).tolist()
@@ -236,38 +271,49 @@ def get_all_ashare_codes() -> list:
         try:
             df_bj = ak.stock_info_bj_name_code()
             if df_bj is not None and not df_bj.empty:
-                bj_col = df_bj.columns[0]  # "证券代码"
+                bj_col = df_bj.columns[0]
                 for c in df_bj[bj_col].astype(str).tolist():
                     c = c.strip().zfill(6)
                     result.append(f"{c}.BJ")
                 print(f"  → 其中北交所 {len(df_bj)} 只")
         except Exception as e:
             print(f"  → 北交所代码获取失败（跳过）：{e}")
-        result = sorted(set(result))
-        if result:
-            print(f"  → 获取到 {len(result)} 只 A 股代码（含北交所）")
-            return result
+        print(f"  → A 股获取到 {len(result)} 只")
     except ImportError:
         print("  → akshare 未安装，跳过（可运行 pip3 install akshare 安装）")
     except Exception as e:
         print(f"  → akshare 拉取失败：{e}")
 
-    # ── 方法2：从本地文件读取 ────────────────────────────────────────
-    codes_file = Path("codes.txt")
-    if codes_file.exists():
-        codes = [l.strip() for l in codes_file.read_text(encoding="utf-8").splitlines()
-                 if l.strip() and not l.startswith("#")]
-        print(f"  → 从 codes.txt 读取 {len(codes)} 个代码")
-        return codes
+    # ── 从本地文件补充 ────────────────────────────────
+    if not result:
+        codes_file = Path("codes.txt")
+        if codes_file.exists():
+            codes = [l.strip() for l in codes_file.read_text(encoding="utf-8").splitlines()
+                     if l.strip() and not l.startswith("#")]
+            result = [c for c in codes if not c.endswith(".HK")]
+            print(f"  → 从 codes.txt 读取 {len(result)} 个 A 股代码")
 
-    raise RuntimeError(
-        "\n❌ 无法自动获取股票代码列表，且未找到 codes.txt。\n\n"
-        "解决方法（二选一）：\n"
-        "  1. 安装 akshare：pip3 install akshare\n"
-        "  2. 手动新建 codes.txt，每行一个股票代码，例如：\n"
-        "  600519.SH\n  300750.SZ\n  688981.SH\n  430047.BJ\n"
-        "然后重新运行：python update_data.py codes.txt"
-    )
+    # ── 港股（iFinD API 扫描）────────────────────────────────
+    try:
+        hk_codes = get_hk_codes()
+        result.extend(hk_codes)
+    except Exception as e:
+        print(f"  → 港股代码获取失败（跳过）：{e}")
+
+    if not result:
+        raise RuntimeError(
+            "\n❌ 无法自动获取股票代码列表。\n\n"
+            "解决方法（二选一）：\n"
+            "  1. 安装 akshare：pip3 install akshare\n"
+            "  2. 手动新建 codes.txt，每行一个股票代码，例如：\n"
+            "  600519.SH\n  300750.SZ\n  688981.SH\n  0700.HK\n"
+        )
+
+    result = sorted(set(result))
+    a_count = sum(1 for c in result if not c.endswith(".HK"))
+    hk_count = sum(1 for c in result if c.endswith(".HK"))
+    print(f"  → 共 {len(result)} 只股票（A股 {a_count} + 港股 {hk_count}）")
+    return result
 
 
 # ══════════════════════════════════════════════════════════════
@@ -287,6 +333,7 @@ def _v(row: dict, *field_names) -> str:
 
 def _normalize_exchange(raw: str, code: str) -> str:
     r = raw.strip()
+    if code.endswith(".HK"):                                 return "港股"
     if "科创" in r:                                          return "A股科创板"
     if "创业" in r:                                          return "A股创业板"
     if "北证" in r or "北交" in r or code.endswith(".BJ"):  return "A股北交所"
@@ -329,12 +376,17 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict) -> list:
     # 去掉申万二级行业名称中的罗马数字后缀（如 "白酒Ⅱ" → "白酒"）
     sub_industry = re.sub(r"[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]+$", "", sub_industry).strip()
     reg_loc      = _v(basic, "ths_prefecture_level_city_stock")
-    display_code = re.sub(r"\.(SH|SZ|BJ)$", "", stock_code, flags=re.IGNORECASE)
+    # 港股保留 .HK 后缀方便辨识，A股去掉后缀
+    if stock_code.endswith(".HK"):
+        display_code = stock_code
+    else:
+        display_code = re.sub(r"\.(SH|SZ|BJ)$", "", stock_code, flags=re.IGNORECASE)
 
     # 市值（API 返回单位为元，转为亿元）
     raw_cap = _v(basic, "ths_market_value_stock")
     try:
-        market_cap = round(float(raw_cap) / 1e8, 1) if raw_cap else None
+        cap_val = float(raw_cap) if raw_cap else 0
+        market_cap = round(cap_val / 1e8, 1) if cap_val > 0 else None
     except (ValueError, TypeError):
         market_cap = None
 
@@ -456,7 +508,7 @@ def main():
                  if l.strip() and not l.startswith("#")]
         print(f"  → 从 {codes_arg} 读取 {len(codes)} 个代码")
     else:
-        codes = get_all_ashare_codes()
+        codes = get_all_stock_codes()
 
     if test_mode:
         codes = codes[:10]
