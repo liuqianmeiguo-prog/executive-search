@@ -64,11 +64,13 @@ BASIC_INDICATORS = [
     ("ths_corp_cn_name_stock",          [""]),           # 公司中文名称
     ("ths_ipo_date_stock",              [""]),           # 首发上市日期
     ("ths_listedsector_stock",          [""]),           # 上市板块
-    ("ths_the_ths_industry_stock",      ["1", _TODAY]),  # 所属同花顺行业
-    ("ths_the_csrc_industry_stock",     ["1", _TODAY]),  # 所属证监会行业（备用）
+    ("ths_the_sw_industry_stock",       ["1", _TODAY]),  # 申万一级行业
     ("ths_prefecture_level_city_stock", [""]),           # 地级市
     ("ths_market_value_stock",          [_TODAY]),       # 总市值（元）
 ]
+
+# 申万二级行业（同名指标不同参数，需单独请求）
+SW_LEVEL2_INDICATOR = ("ths_the_sw_industry_stock", ["2", _TODAY])
 
 MGMT_INDICATORS = [
     ("ths_cfo_current_stock",                  [""]),    # 财务总监（现任）— 注意用 ths_cfo_current_stock
@@ -322,9 +324,10 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict) -> list:
 
     exchange     = _normalize_exchange(_v(basic, "ths_listedsector_stock"), stock_code)
     listing_year = _parse_year(_v(basic, "ths_ipo_date_stock"))
-    industry     = (_v(basic, "ths_the_csrc_industry_stock")
-                    or _v(basic, "ths_the_ths_industry_stock")
-                    or "")
+    industry     = _v(basic, "ths_the_sw_industry_stock") or ""
+    sub_industry = _v(basic, "sw_industry_lv2") or ""
+    # 去掉申万二级行业名称中的罗马数字后缀（如 "白酒Ⅱ" → "白酒"）
+    sub_industry = re.sub(r"[ⅠⅡⅢⅣⅤⅥⅦⅧⅨⅩ]+$", "", sub_industry).strip()
     reg_loc      = _v(basic, "ths_prefecture_level_city_stock")
     display_code = re.sub(r"\.(SH|SZ|BJ)$", "", stock_code, flags=re.IGNORECASE)
 
@@ -383,6 +386,7 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict) -> list:
 
             rows.append({
                 "industry":          industry or "—",
+                "subIndustry":       sub_industry or "—",
                 "stockCode":         display_code,
                 "companyName":       company_name,
                 "exchange":          exchange,
@@ -461,15 +465,23 @@ def main():
     print(f"  → 共 {len(codes)} 只股票待处理")
 
     # ── 3. 拉取基本信息
-    print("\n[3/5] 拉取公司基本信息...")
+    print("\n[3/6] 拉取公司基本信息...")
     basic_map = fetch_all(codes, BASIC_INDICATORS, "基本信息")
 
-    # ── 4. 拉取高管信息
-    print("\n[4/5] 拉取高管信息...")
+    # ── 3b. 拉取申万二级行业（同名指标不同参数，需单独请求）
+    print("\n[4/6] 拉取申万二级行业...")
+    sw2_map = fetch_all(codes, [SW_LEVEL2_INDICATOR], "申万二级")
+    # 合并到 basic_map，字段名加 _lv2 后缀以区分
+    for code, data in sw2_map.items():
+        val = data.get("ths_the_sw_industry_stock", "")
+        basic_map.setdefault(code, {})["sw_industry_lv2"] = val
+
+    # ── 5. 拉取高管信息
+    print("\n[5/6] 拉取高管信息...")
     mgmt_map = fetch_all(codes, MGMT_INDICATORS, "高管信息")
 
-    # ── 5. 转换 & 注入
-    print("\n[5/5] 转换数据并写入 HTML...")
+    # ── 6. 转换 & 写入
+    print("\n[6/6] 转换数据并写入 JSON...")
     all_codes = sorted(set(list(basic_map) + list(mgmt_map)))
     all_rows, skipped = [], 0
 

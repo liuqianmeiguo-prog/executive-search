@@ -46,8 +46,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC'
 .ms-btn.open { border-color: #0f2744; box-shadow: 0 0 0 2px rgba(15,39,68,.1); }
 .ms-btn .ms-arrow { font-size: 10px; color: #888; flex-shrink: 0; }
 .ms-btn .ms-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ms-dropdown { display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12); z-index: 2000; max-height: 210px; overflow-y: auto; }
+.ms-dropdown { display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.12); z-index: 2000; max-height: 280px; overflow-y: auto; }
 .ms-dropdown.show { display: block; }
+.ms-search { width: 100%; padding: 7px 10px; border: none; border-bottom: 1px solid #eee; font-size: 12px; outline: none; background: #fff; }
+.ms-search:focus { border-bottom-color: #0f2744; }
 .ms-sa { padding: 7px 10px; border-bottom: 1px solid #eee; font-size: 11px; color: #0f2744; font-weight: 600; cursor: pointer; background: #f8faff; }
 .ms-sa:hover { background: #eff3ff; }
 .ms-opt { padding: 7px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 13px; }
@@ -282,15 +284,30 @@ td.cell-act { text-align: center; }
       </div>
     </div>
 
-    <!-- 行业 -->
+    <!-- 一级行业 -->
     <div class="filter-section">
-      <div class="filter-label">行业（可多选）</div>
+      <div class="filter-label">一级行业（可多选）</div>
       <div class="ms-wrap">
         <button class="ms-btn" id="btn-ind" onclick="toggleDD('dd-ind','btn-ind')">
           <span class="ms-text" id="lbl-ind">全部行业</span><span class="ms-arrow">▾</span>
         </button>
         <div class="ms-dropdown" id="dd-ind">
+          <input type="text" class="ms-search" id="search-ind" placeholder="搜索行业…" oninput="filterDD('ind',this.value)">
           <div class="ms-sa" onclick="selectAll('ind')">全选 / 全不选</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 二级行业 -->
+    <div class="filter-section">
+      <div class="filter-label">二级行业（可多选）</div>
+      <div class="ms-wrap">
+        <button class="ms-btn" id="btn-sub" onclick="toggleDD('dd-sub','btn-sub')">
+          <span class="ms-text" id="lbl-sub">全部子行业</span><span class="ms-arrow">▾</span>
+        </button>
+        <div class="ms-dropdown" id="dd-sub">
+          <input type="text" class="ms-search" id="search-sub" placeholder="搜索子行业…" oninput="filterDD('sub',this.value)">
+          <div class="ms-sa" onclick="selectAll('sub')">全选 / 全不选</div>
         </div>
       </div>
     </div>
@@ -701,9 +718,11 @@ function buildDD(ddId, items, key){
 
 function initDropdowns(){
   const industries = [...new Set(DATA.map(d=>d.industry).filter(Boolean))].sort();
+  const subInds    = [...new Set(DATA.map(d=>d.subIndustry).filter(Boolean))].sort();
   const provinces  = [...new Set(DATA.map(d=>getProvince(d.registrationLoc)).filter(Boolean))].sort();
   const listingYrs = [...new Set(DATA.map(d=>d.listingYear).filter(Boolean))].sort((a,b)=>a-b);
   buildDD('dd-ind', industries, 'ind');
+  buildDD('dd-sub', subInds, 'sub');
   buildDD('dd-cap', CAP_TIERS, 'cap');
   buildDD('dd-reg', provinces, 'reg');
   buildDD('dd-yr',  listingYrs.map(String), 'yr');
@@ -718,9 +737,11 @@ function rebuildDropdowns(){
     buildDD(ddId, items, key);
   }
   const industries = [...new Set(DATA.map(d=>d.industry).filter(Boolean))].sort();
+  const subInds    = [...new Set(DATA.map(d=>d.subIndustry).filter(Boolean))].sort();
   const provinces  = [...new Set(DATA.map(d=>getProvince(d.registrationLoc)).filter(Boolean))].sort();
   const listingYrs = [...new Set(DATA.map(d=>d.listingYear).filter(Boolean))].sort((a,b)=>a-b);
   clearRebuild('dd-ind', industries, 'ind');
+  clearRebuild('dd-sub', subInds, 'sub');
   clearRebuild('dd-reg', provinces, 'reg');
   clearRebuild('dd-yr', listingYrs.map(String), 'yr');
 }
@@ -732,24 +753,36 @@ function toggleDD(ddId, btnId){
   if(!isOpen){
     dd.classList.add('show');
     document.getElementById(btnId).classList.add('open');
+    const search=dd.querySelector('.ms-search');
+    if(search){ search.value=''; filterDD(ddId.replace('dd-',''),''); setTimeout(()=>search.focus(),50); }
   }
 }
 
 function closeAllDD(){
-  ['dd-ind','dd-cap','dd-reg','dd-yr','dd-age','dd-edu'].forEach(id=>{
+  ['dd-ind','dd-sub','dd-cap','dd-reg','dd-yr','dd-age','dd-edu'].forEach(id=>{
     document.getElementById(id).classList.remove('show');
   });
-  ['btn-ind','btn-cap','btn-reg','btn-yr','btn-age','btn-edu'].forEach(id=>{
+  ['btn-ind','btn-sub','btn-cap','btn-reg','btn-yr','btn-age','btn-edu'].forEach(id=>{
     document.getElementById(id).classList.remove('open');
   });
 }
 
 function selectAll(key){
   const dd=document.getElementById('dd-'+key);
-  const cbs=[...dd.querySelectorAll(`input[data-key="${key}"]`)];
+  // 只操作当前可见的选项
+  const cbs=[...dd.querySelectorAll(`input[data-key="${key}"]`)].filter(c=>c.closest('.ms-opt').style.display!=='none');
   const allOn=cbs.every(c=>c.checked);
   cbs.forEach(c=>c.checked=!allOn);
   applyFilters();
+}
+
+function filterDD(key, query){
+  const dd=document.getElementById('dd-'+key);
+  const q=query.trim().toLowerCase();
+  dd.querySelectorAll('.ms-opt').forEach(opt=>{
+    const text=opt.querySelector('span').textContent.toLowerCase();
+    opt.style.display=(!q||text.includes(q))?'':'none';
+  });
 }
 
 function getChecked(key){
@@ -775,6 +808,7 @@ function applyFilters(){
 
   const exs  = Object.keys(EXCHANGE_IDS).filter(k=>document.getElementById(EXCHANGE_IDS[k]).checked);
   const inds = getChecked('ind');
+  const subs = getChecked('sub');
   const caps = getChecked('cap');
   const regs = getChecked('reg');
   const yrs  = getChecked('yr').map(Number);
@@ -782,6 +816,7 @@ function applyFilters(){
   const edus = getChecked('edu');
 
   updateLabel('ind','全部行业');
+  updateLabel('sub','全部子行业');
   updateLabel('cap','全部市值');
   updateLabel('reg','全部省份');
   updateLabel('yr', '全部年份');
@@ -793,6 +828,7 @@ function applyFilters(){
     if(pos && !d.position.toLowerCase().includes(pos))     return false;
     if(exs.length  && !exs.includes(d.exchange))           return false;
     if(inds.length && !inds.includes(d.industry))          return false;
+    if(subs.length && !subs.includes(d.subIndustry))      return false;
     if(caps.length){
       const t=capTier(d.marketCapValue);
       if(!t||!caps.includes(t)) return false;
@@ -827,11 +863,16 @@ function resetAll(){
   document.getElementById('f-cpa').checked=false;
   document.getElementById('f-ib').checked=false;
   Object.values(EXCHANGE_IDS).forEach(id=>{ const el=document.getElementById(id); if(el) el.checked=false; });
-  ['ind','cap','reg','yr','age'].forEach(k=>{
+  ['ind','sub','cap','reg','yr','age'].forEach(k=>{
     document.querySelectorAll(`#dd-${k} input[data-key="${k}"]`).forEach(c=>c.checked=false);
-    const defs={ind:'全部行业',cap:'全部市值',reg:'全部地区',yr:'全部年份',age:'全部年龄'};
+    const defs={ind:'全部行业',sub:'全部二级行业',cap:'全部市值',reg:'全部地区',yr:'全部年份',age:'全部年龄'};
     document.getElementById('lbl-'+k).textContent=defs[k];
   });
+  // 清空搜索框
+  const sInd=document.getElementById('search-ind'); if(sInd) sInd.value='';
+  const sSub=document.getElementById('search-sub'); if(sSub) sSub.value='';
+  // 重置下拉选项显示
+  ['ind','sub'].forEach(k=>{ filterDD(k,''); });
   sortCol=null; sortDir='asc';
   document.querySelectorAll('.sa').forEach(e=>e.textContent='');
   filtered=[...DATA];
@@ -929,7 +970,7 @@ function renderTable(){
 
   tbody.innerHTML=slice.map((d,i)=>`
     <tr>
-      <td class="cell-ind" title="${d.industry||''}">${d.industry||'—'}</td>
+      <td class="cell-ind" title="${d.industry||''} > ${d.subIndustry||''}">${d.subIndustry||d.industry||'—'}</td>
       <td>${d.stockCode}</td>
       <td class="cell-co" title="${d.companyName}">${d.companyName}</td>
       <td>${exTag(d.exchange)}</td>
@@ -1001,7 +1042,8 @@ function openDrawer(d){
     <div class="drawer-sec">
       <div class="drawer-sec-title">基本信息</div>
       <div class="info-grid">
-        <div class="info-cell"><div class="lbl">行业</div><div class="val">${d.industry||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">一级行业</div><div class="val">${d.industry||'—'}</div></div>
+        <div class="info-cell"><div class="lbl">二级行业</div><div class="val">${d.subIndustry||'—'}</div></div>
         <div class="info-cell"><div class="lbl">证券代码</div><div class="val">${d.stockCode}</div></div>
         <div class="info-cell"><div class="lbl">上市板块</div><div class="val">${d.exchange}</div></div>
         <div class="info-cell"><div class="lbl">上市年份</div><div class="val">${yearTxt}</div></div>
@@ -1068,7 +1110,8 @@ async function exportExcel(){
 
   // ── 列定义 ──
   ws.columns = [
-    { header:'行业',       key:'ind',   width:14 },
+    { header:'一级行业',   key:'ind',   width:10 },
+    { header:'二级行业',   key:'sub',   width:14 },
     { header:'证券代码',   key:'code',  width:11 },
     { header:'公司名称',   key:'co',    width:26 },
     { header:'上市板块',   key:'ex',    width:10 },
@@ -1107,6 +1150,7 @@ async function exportExcel(){
   filtered.forEach((d, idx) => {
     const row = ws.addRow({
       ind:  d.industry || '',
+      sub:  d.subIndustry || '',
       code: d.stockCode,
       co:   d.companyName,
       ex:   d.exchange,
@@ -1186,7 +1230,7 @@ function getState(){
     cpa: document.getElementById('f-cpa').checked,
     ib:  document.getElementById('f-ib').checked,
     exs: Object.keys(EXCHANGE_IDS).filter(k=>{ const el=document.getElementById(EXCHANGE_IDS[k]); return el&&el.checked; }),
-    ind: getChecked('ind'), cap: getChecked('cap'),
+    ind: getChecked('ind'), sub: getChecked('sub'), cap: getChecked('cap'),
     reg: getChecked('reg'), yr:  getChecked('yr'), age: getChecked('age'), edu: getChecked('edu')
   };
 }
@@ -1199,7 +1243,7 @@ function loadState(s){
   document.getElementById('f-cpa').checked=s.cpa;
   document.getElementById('f-ib').checked=s.ib;
   Object.keys(EXCHANGE_IDS).forEach(k=>{ const el=document.getElementById(EXCHANGE_IDS[k]); if(el) el.checked=s.exs.includes(k); });
-  const MAP={ind:s.ind,cap:s.cap,reg:s.reg,yr:s.yr,age:s.age,edu:s.edu||[]};
+  const MAP={ind:s.ind,sub:s.sub||[],cap:s.cap,reg:s.reg,yr:s.yr,age:s.age,edu:s.edu||[]};
   Object.keys(MAP).forEach(key=>{
     document.querySelectorAll(`#dd-${key} input[data-key="${key}"]`).forEach(c=>c.checked=MAP[key].includes(c.value));
   });
@@ -1570,8 +1614,8 @@ function showToast(msg){
 //  EVENT LISTENERS
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('click', e=>{
-  const inside=['dd-ind','dd-cap','dd-reg','dd-yr','dd-age','dd-edu',
-                'btn-ind','btn-cap','btn-reg','btn-yr','btn-age','btn-edu'];
+  const inside=['dd-ind','dd-sub','dd-cap','dd-reg','dd-yr','dd-age','dd-edu',
+                'btn-ind','btn-sub','btn-cap','btn-reg','btn-yr','btn-age','btn-edu'];
   if(!inside.some(id=>{ const el=document.getElementById(id); return el&&el.contains(e.target); }))
     closeAllDD();
 });

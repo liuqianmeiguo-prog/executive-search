@@ -1,6 +1,8 @@
 __pycache__/
 *.backup_*.html
-preview.png
+*.png
+.DS_Store
+~$*
 同花顺/
 安装/
 *.pyc
