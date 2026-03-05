@@ -363,7 +363,7 @@ def _split(v: str) -> list:
     return [s.strip() for s in re.split(r"[;；,，]", str(v)) if s.strip()]
 
 
-def build_person_rows(stock_code: str, basic: dict, mgmt: dict) -> list:
+def build_person_rows(stock_code: str, basic: dict, mgmt: dict, hk_cap_map: dict | None = None) -> list:
     """将单家公司的 basic + mgmt 字典转换为高管记录列表"""
     company_name = _v(basic, "ths_corp_cn_name_stock")
     if not company_name:
@@ -382,13 +382,18 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict) -> list:
     else:
         display_code = re.sub(r"\.(SH|SZ|BJ)$", "", stock_code, flags=re.IGNORECASE)
 
-    # 市值（API 返回单位为元，转为亿元）
-    raw_cap = _v(basic, "ths_market_value_stock")
-    try:
-        cap_val = float(raw_cap) if raw_cap else 0
-        market_cap = round(cap_val / 1e8, 1) if cap_val > 0 else None
-    except (ValueError, TypeError):
-        market_cap = None
+    # 市值：A股用 iFinD（元→亿元）；港股用新浪行情（已是亿港元）
+    if stock_code.endswith(".HK"):
+        market_cap = (hk_cap_map or {}).get(stock_code)
+        cap_currency = "HKD"
+    else:
+        raw_cap = _v(basic, "ths_market_value_stock")
+        try:
+            cap_val = float(raw_cap) if raw_cap else 0
+            market_cap = round(cap_val / 1e8, 1) if cap_val > 0 else None
+        except (ValueError, TypeError):
+            market_cap = None
+        cap_currency = "CNY"
 
     # 高管并行数组（多值字段，分号分隔）
     name_list   = _split(_v(mgmt, "ths_sm_name_current_stock"))
@@ -444,7 +449,7 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict) -> list:
                 "exchange":          exchange,
                 "listingYear":       listing_year,
                 "marketCapValue":    market_cap,
-                "marketCapCurrency": "CNY",
+                "marketCapCurrency": cap_currency,
                 "registrationLoc":   reg_loc,
                 "name":              name,
                 "location":          reg_loc,
@@ -471,6 +476,56 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict) -> list:
 # ══════════════════════════════════════════════════════════════
 #  数据输出
 # ══════════════════════════════════════════════════════════════
+
+def fetch_hk_market_cap(hk_codes: list) -> dict:
+    """
+    通过新浪行情接口批量获取港股市值（港元，亿）。
+    返回 {thscode: market_cap_hkd_yi} 字典，如 {'0700.HK': 45000.0}
+    """
+    print("  → 通过新浪行情接口获取港股市值...")
+    result = {}
+    batch = 200  # 新浪支持每次约200个
+    headers = {"Referer": "https://finance.sina.com.cn"}
+    url = "https://hq.sinajs.cn/list={}"
+
+    for i in range(0, len(hk_codes), batch):
+        chunk = hk_codes[i:i + batch]
+        # 新浪格式：hk00700（5位，前补零）
+        sina_codes = ",".join(f"hk{c.replace('.HK','').zfill(5)}" for c in chunk)
+        try:
+            resp = requests.get(url.format(sina_codes), headers=headers, timeout=15)
+            resp.encoding = "gbk"
+            for line in resp.text.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                # 提取代码：hq_str_hk00700="..."
+                m = re.match(r'var hq_str_hk(\d+)="([^"]*)"', line)
+                if not m:
+                    continue
+                code_num = m.group(1).lstrip("0") or "0"
+                fields = m.group(2).split(",")
+                if len(fields) < 12:
+                    continue
+                try:
+                    price = float(fields[6]) if fields[6] else 0   # 最新价
+                    if price == 0:
+                        price = float(fields[3]) if fields[3] else 0  # 昨收价备用
+                    shares = float(fields[11]) if fields[11] else 0   # 总股本（股）
+                    if price > 0 and shares > 0:
+                        mv_yi = round(price * shares / 1e8, 1)  # 亿港元
+                        thscode = f"{int(code_num):04d}.HK"
+                        result[thscode] = mv_yi
+                except (ValueError, IndexError):
+                    pass
+        except Exception as e:
+            print(f"    ⚠ 批次 {i//batch+1} 失败：{e}")
+        time.sleep(0.1)
+
+    ok = sum(1 for v in result.values() if v and v > 0)
+    print(f"  → 港股市值获取完成：{ok}/{len(hk_codes)} 只有效")
+    return result
+
 
 def save_data_json(rows: list):
     """将数据保存为 data.json（供 HTML 异步加载）"""
@@ -532,6 +587,13 @@ def main():
     print("\n[5/6] 拉取高管信息...")
     mgmt_map = fetch_all(codes, MGMT_INDICATORS, "高管信息")
 
+    # ── 5b. 拉取港股市值（新浪行情）
+    hk_codes = [c for c in codes if c.endswith(".HK")]
+    hk_cap_map = {}
+    if hk_codes and not test_mode:
+        print("\n[5b] 拉取港股市值（新浪行情）...")
+        hk_cap_map = fetch_hk_market_cap(hk_codes)
+
     # ── 6. 转换 & 写入
     print("\n[6/6] 转换数据并写入 JSON...")
     all_codes = sorted(set(list(basic_map) + list(mgmt_map)))
@@ -542,6 +604,7 @@ def main():
             code,
             basic_map.get(code, {}),
             mgmt_map.get(code, {}),
+            hk_cap_map,
         )
         if rows:
             all_rows.extend(rows)
