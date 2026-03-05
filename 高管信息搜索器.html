@@ -271,6 +271,12 @@ td.cell-act { text-align: center; }
       <input type="text" id="f-company" class="filter-input" placeholder="输入关键词…" oninput="applyFilters()">
     </div>
 
+    <!-- 高管姓名 -->
+    <div class="filter-section">
+      <div class="filter-label">高管姓名</div>
+      <input type="text" id="f-name" class="filter-input" placeholder="如：张三…" oninput="applyFilters()">
+    </div>
+
     <!-- 上市板块 -->
     <div class="filter-section">
       <div class="filter-label">上市板块（可多选）</div>
@@ -798,8 +804,9 @@ function updateLabel(key, def){
 //  FILTER
 // ═══════════════════════════════════════════════════════════
 function applyFilters(){
-  const co  = document.getElementById('f-company').value.trim().toLowerCase();
-  const pos = document.getElementById('f-pos').value.trim().toLowerCase();
+  const co   = document.getElementById('f-company').value.trim().toLowerCase();
+  const name = document.getElementById('f-name').value.trim().toLowerCase();
+  const pos  = document.getElementById('f-pos').value.trim().toLowerCase();
   const regText = document.getElementById('f-reg-text').value.trim().toLowerCase();
   const srv = document.querySelector('input[name=srv]:checked').value;
   const gdr = document.querySelector('input[name=gdr]:checked').value;
@@ -824,8 +831,9 @@ function applyFilters(){
   updateLabel('edu','全部学历');
 
   filtered = DATA.filter(d=>{
-    if(co  && !d.companyName.toLowerCase().includes(co))  return false;
-    if(pos && !d.position.toLowerCase().includes(pos))     return false;
+    if(co   && !d.companyName.toLowerCase().includes(co))  return false;
+    if(name && !d.name.toLowerCase().includes(name))       return false;
+    if(pos  && !d.position.toLowerCase().includes(pos))    return false;
     if(exs.length  && !exs.includes(d.exchange))           return false;
     if(inds.length && !inds.includes(d.industry))          return false;
     if(subs.length && !subs.includes(d.subIndustry))      return false;
@@ -857,6 +865,7 @@ function applyFilters(){
 
 function resetAll(){
   document.getElementById('f-company').value='';
+  document.getElementById('f-name').value='';
   document.getElementById('f-pos').value='';
   document.getElementById('s-all').checked=true;
   document.getElementById('g-all').checked=true;
@@ -1223,8 +1232,9 @@ async function exportExcel(){
 // ═══════════════════════════════════════════════════════════
 function getState(){
   return {
-    co:  document.getElementById('f-company').value,
-    pos: document.getElementById('f-pos').value,
+    co:   document.getElementById('f-company').value,
+    name: document.getElementById('f-name').value,
+    pos:  document.getElementById('f-pos').value,
     srv: document.querySelector('input[name=srv]:checked').value,
     gdr: document.querySelector('input[name=gdr]:checked').value,
     cpa: document.getElementById('f-cpa').checked,
@@ -1237,6 +1247,7 @@ function getState(){
 
 function loadState(s){
   document.getElementById('f-company').value=s.co;
+  document.getElementById('f-name').value=s.name||'';
   document.getElementById('f-pos').value=s.pos;
   document.querySelectorAll('input[name=srv]').forEach(r=>r.checked=r.value===s.srv);
   document.querySelectorAll('input[name=gdr]').forEach(r=>r.checked=r.value===s.gdr);
