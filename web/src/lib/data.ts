@@ -21,10 +21,47 @@ let _cache: Executive[] | null = null;
 export function getAllData(): Executive[] {
   if (_cache) return _cache;
 
-  // data.json 放在 web/ 根目录（Vercel 部署时与 next.config.ts 同级）
-  const dataPath = path.join(process.cwd(), "data.json");
-  const raw = fs.readFileSync(dataPath, "utf-8");
-  _cache = JSON.parse(raw) as Executive[];
+  // Vercel serverless 函数中 process.cwd() 指向 /var/task
+  // data.json 在项目根目录，需要用多种路径尝试
+  const candidates = [
+    path.join(process.cwd(), "data.json"),
+    path.join(process.cwd(), "web", "data.json"),
+    path.join("/var/task", "data.json"),
+    path.join("/var/task", "web", "data.json"),
+  ];
+
+  let raw: string | null = null;
+  for (const p of candidates) {
+    try {
+      raw = fs.readFileSync(p, "utf-8");
+      break;
+    } catch {
+      // 继续尝试下一个路径
+    }
+  }
+
+  if (!raw) {
+    console.error("data.json not found, tried:", candidates);
+    return [];
+  }
+
+  const parsed = JSON.parse(raw);
+  // 兼容两种字段名格式（code/company 或 stockCode/companyName）
+  _cache = parsed.map((r: Record<string, unknown>) => ({
+    name: r.name,
+    company: r.company ?? r.companyName,
+    exchange: r.exchange,
+    position: r.position,
+    industry: r.industry,
+    subIndustry: r.subIndustry,
+    marketCap: r.marketCap ?? null,
+    marketCapCurrency: r.marketCapCurrency ?? "CNY",
+    education: r.education,
+    birthday: r.birthday,
+    tenure: r.tenure,
+    code: r.code ?? r.stockCode,
+  })) as Executive[];
+
   return _cache;
 }
 
