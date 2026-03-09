@@ -589,7 +589,12 @@ async function loadData() {
       return;
     }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    SAMPLE_DATA = await resp.json();
+    const raw = await resp.json();
+    // 兼容 code/company 与 stockCode/companyName 两套字段名
+    SAMPLE_DATA = raw.map(r => Object.assign(r, {
+      stockCode:   r.stockCode   ?? r.code,
+      companyName: r.companyName ?? r.company,
+    }));
     DATA = [...SAMPLE_DATA];
     _dataLoaded = true;
     badge.textContent = '✅ iFinD 数据（' + DATA.length + ' 条）';
