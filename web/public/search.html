@@ -150,6 +150,16 @@ td.cell-act { text-align: center; }
 .linkedin-link:hover { text-decoration: underline; }
 .dash { color: #d1d5db; }
 
+/* ─── Feishu Match Status ─── */
+.fs-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.fs-matched   { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.fs-maybe     { background: #fef9c3; color: #b45309; border: 1px solid #fde68a; }
+.fs-none      { background: #f3f4f6; color: #9ca3af; border: 1px solid #e5e7eb; }
+.fs-pending   { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+.fs-open-btn  { display: inline-flex; align-items: center; gap: 3px; padding: 3px 9px; border-radius: 5px; font-size: 11px; font-weight: 500; background: #fff; border: 1px solid #0f2744; color: #0f2744; cursor: pointer; text-decoration: none; transition: background .15s; }
+.fs-open-btn:hover { background: #f0f4fb; }
+.drawer-fs { background: #f8faff; border: 1px solid #dbeafe; border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
 /* Empty state */
 .empty { padding: 56px 24px; text-align: center; color: #bbb; }
 .empty .ico { font-size: 40px; margin-bottom: 10px; }
@@ -495,6 +505,7 @@ td.cell-act { text-align: center; }
               <th class="col-sex">性别</th>
               <th class="col-ipo">在任</th>
               <th class="col-edu">学历</th>
+              <th class="col-act" style="min-width:70px;">飞书</th>
               <th class="col-act"></th>
             </tr>
           </thead>
@@ -964,6 +975,26 @@ function sortData(){
 }
 
 // ═══════════════════════════════════════════════════════════
+//  FEISHU MATCH STATUS（占位，API 待接入）
+// ═══════════════════════════════════════════════════════════
+// feishuMatch 字段值：'matched' | 'maybe' | 'none' | undefined
+// 权限审批通过后，将从 /api/feishu/match?name=&company= 异步拉取
+function fsStatusBadge(d) {
+  const s = d.feishuMatch;
+  if (s === 'matched') return '<span class="fs-badge fs-matched">✓ 已匹配</span>';
+  if (s === 'maybe')   return '<span class="fs-badge fs-maybe">? 疑似匹配</span>';
+  if (s === 'none')    return '<span class="fs-badge fs-none">— 未匹配</span>';
+  return '<span class="fs-badge fs-pending">待接入</span>';
+}
+function fsStatusDesc(d) {
+  const s = d.feishuMatch;
+  if (s === 'matched') return '飞书招聘中已有对应候选人';
+  if (s === 'maybe')   return '发现同名候选人，请人工确认';
+  if (s === 'none')    return '飞书招聘中暂无记录';
+  return '飞书招聘 API 权限审批中，接入后自动显示匹配状态';
+}
+
+// ═══════════════════════════════════════════════════════════
 //  TABLE
 // ═══════════════════════════════════════════════════════════
 function renderTable(){
@@ -977,7 +1008,7 @@ function renderTable(){
 
   const tbody=document.getElementById('tbody');
   if(!slice.length){
-    tbody.innerHTML=`<tr><td colspan="13"><div class="empty"><div class="ico">🔍</div><p>没有符合条件的候选人，请调整筛选条件</p></div></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="14"><div class="empty"><div class="ico">🔍</div><p>没有符合条件的候选人，请调整筛选条件</p></div></td></tr>`;
     renderPagination(0,0); return;
   }
 
@@ -995,6 +1026,7 @@ function renderTable(){
       <td class="cell-sex">${d.gender||'—'}</td>
       <td class="cell-ipo">${d.isIPOServing?'<span class="tag-on">✓</span>':'<span class="dash">—</span>'}</td>
       <td class="cell-edu">${d.background||'—'}</td>
+      <td class="cell-act">${fsStatusBadge(d)}</td>
       <td class="cell-act"><button class="btn-detail" onclick="openDrawer(filtered[${s+i}])">详情</button></td>
     </tr>`).join('');
 
@@ -1075,6 +1107,16 @@ function openDrawer(d){
     ${eduHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">教育背景</div>${eduHtml}</div>` : ''}
     ${careerHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">工作经历</div>${careerHtml}</div>` : ''}
     ${hlHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">主要亮点</div>${hlHtml}</div>` : ''}
+    <div class="drawer-sec">
+      <div class="drawer-sec-title">飞书招聘匹配</div>
+      <div class="drawer-fs">
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${fsStatusBadge(d)}
+          <span style="font-size:12px;color:#555;">${fsStatusDesc(d)}</span>
+        </div>
+        <span style="font-size:11px;color:#bbb;">API 待接入</span>
+      </div>
+    </div>
     <div class="drawer-sec">
       <div class="drawer-sec-title">LinkedIn</div>
       ${liHtml}
