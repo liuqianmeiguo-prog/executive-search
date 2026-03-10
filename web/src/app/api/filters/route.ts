@@ -8,6 +8,6 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const options = getFilterOptions();
+  const options = await getFilterOptions();
   return NextResponse.json(options);
 }

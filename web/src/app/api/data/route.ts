@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const data = getAllData();
+  const data = await getAllData();
   return NextResponse.json(data, {
     headers: {
       // 禁止浏览器缓存，每次都验证登录状态
