@@ -1,8 +1,6 @@
 // 数据层：从飞书多维表格读取高管数据（飞书失败时自动回退到本地 data.json）
 // 飞书应用：cli_a924f52e217bdbd3
 // 多维表格：PlCRboHS2a62jmsa33tcRjYUntg / tbl6ymvSFfkOoCsp
-import path from "path";
-import fs from "fs";
 
 export interface Executive {
   name: string;
@@ -14,12 +12,12 @@ export interface Executive {
   subIndustry: string;
   marketCap: number | null;
   marketCapCurrency: string;
-  listingYear: number | null;      // 上市年份
-  province: string;                 // 注册省份
-  education: string;                // 最高学历
-  birthday: string;                 // 出生年份
-  tenure: string;                   // 任职起始时间
-  detail?: string;                  // 详细履历（来自 Qiankun 数据）
+  listingYear: number | null;
+  province: string;
+  education: string;
+  birthday: string;
+  tenure: string;
+  detail?: string;
 }
 
 // ─── 飞书 API ───────────────────────────────────────────────
@@ -113,10 +111,10 @@ export async function getAllData(): Promise<Executive[]> {
     _cacheTime = Date.now();
   }
 
-  return _cache;
+  return _cache!;
 }
 
-// ─── 本地 data.json 回退 ────────────────────────────────────
+// ─── 本地 data.json 回退（require 方式，Next.js 自动打包）────
 
 interface LocalRecord {
   name: string; companyName: string; stockCode: string; exchange: string;
@@ -128,40 +126,30 @@ interface LocalRecord {
 
 function loadLocalData(): Executive[] {
   try {
-    const candidates = [
-      path.join(process.cwd(), "data.json"),
-      path.join(process.cwd(), "web", "data.json"),
-      path.join(__dirname, "../../../../data.json"),
-      path.join(__dirname, "../../../../../data.json"),
-    ];
-    console.log("查找 data.json，cwd:", process.cwd(), "候选路径:", candidates);
-    for (const p of candidates) {
-      if (fs.existsSync(p)) {
-        const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as LocalRecord[];
-        console.log(`从本地 data.json 加载完成，共 ${raw.length} 条`);
-        return raw.map((r) => ({
-          name:              r.name ?? "",
-          company:           r.companyName ?? "",
-          code:              r.stockCode ?? "",
-          exchange:          r.exchange ?? "",
-          position:          r.position ?? "",
-          industry:          r.industry ?? "",
-          subIndustry:       r.subIndustry ?? "",
-          marketCap:         r.marketCapValue != null ? Number(r.marketCapValue) : null,
-          marketCapCurrency: r.marketCapCurrency ?? "CNY",
-          listingYear:       r.listingYear != null ? Number(r.listingYear) : null,
-          province:          r.registrationLoc ?? "",
-          education:         Array.isArray(r.education) ? r.education.join(",") : "",
-          birthday:          r.age != null ? String(r.age) : "",
-          tenure:            "",
-          detail:            r.detail ?? undefined,
-        }));
-      }
-    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const raw = require("../../data.json") as LocalRecord[];
+    console.log(`从本地 data.json 加载完成，共 ${raw.length} 条`);
+    return raw.map((r) => ({
+      name:              r.name ?? "",
+      company:           r.companyName ?? "",
+      code:              r.stockCode ?? "",
+      exchange:          r.exchange ?? "",
+      position:          r.position ?? "",
+      industry:          r.industry ?? "",
+      subIndustry:       r.subIndustry ?? "",
+      marketCap:         r.marketCapValue != null ? Number(r.marketCapValue) : null,
+      marketCapCurrency: r.marketCapCurrency ?? "CNY",
+      listingYear:       r.listingYear != null ? Number(r.listingYear) : null,
+      province:          r.registrationLoc ?? "",
+      education:         Array.isArray(r.education) ? r.education.join(",") : "",
+      birthday:          r.age != null ? String(r.age) : "",
+      tenure:            "",
+      detail:            r.detail ?? undefined,
+    }));
   } catch (e) {
     console.error("本地 data.json 加载失败:", e);
+    return [];
   }
-  return [];
 }
 
 export async function searchData(params: {
@@ -177,59 +165,30 @@ export async function searchData(params: {
   pageSize?: number;
 }): Promise<{ data: Executive[]; total: number; page: number; pageSize: number }> {
   const {
-    name,
-    company,
-    exchange,
-    industry,
-    subIndustry,
-    position,
-    capMin,
-    capMax,
-    page = 1,
-    pageSize = 50,
+    name, company, exchange, industry, subIndustry, position,
+    capMin, capMax, page = 1, pageSize = 50,
   } = params;
 
   let rows = await getAllData();
 
-  if (name) {
-    const q = name.toLowerCase();
-    rows = rows.filter((r) => r.name.toLowerCase().includes(q));
-  }
-  if (company) {
-    const q = company.toLowerCase();
-    rows = rows.filter((r) => r.company.toLowerCase().includes(q));
-  }
-  if (exchange?.length) {
-    rows = rows.filter((r) => exchange.includes(r.exchange));
-  }
-  if (industry?.length) {
-    rows = rows.filter((r) => industry.includes(r.industry));
-  }
-  if (subIndustry?.length) {
-    rows = rows.filter((r) => subIndustry.includes(r.subIndustry));
-  }
-  if (position) {
-    const q = position.toLowerCase();
-    rows = rows.filter((r) => r.position.toLowerCase().includes(q));
-  }
-  if (capMin != null) {
-    rows = rows.filter((r) => r.marketCap != null && r.marketCap >= capMin);
-  }
-  if (capMax != null) {
-    rows = rows.filter((r) => r.marketCap != null && r.marketCap <= capMax);
-  }
+  if (name)         { const q = name.toLowerCase();     rows = rows.filter(r => r.name.toLowerCase().includes(q)); }
+  if (company)      { const q = company.toLowerCase();  rows = rows.filter(r => r.company.toLowerCase().includes(q)); }
+  if (exchange?.length)    rows = rows.filter(r => exchange.includes(r.exchange));
+  if (industry?.length)    rows = rows.filter(r => industry.includes(r.industry));
+  if (subIndustry?.length) rows = rows.filter(r => subIndustry.includes(r.subIndustry));
+  if (position)     { const q = position.toLowerCase(); rows = rows.filter(r => r.position.toLowerCase().includes(q)); }
+  if (capMin != null) rows = rows.filter(r => r.marketCap != null && r.marketCap >= capMin);
+  if (capMax != null) rows = rows.filter(r => r.marketCap != null && r.marketCap <= capMax);
 
   const total = rows.length;
   const start = (page - 1) * pageSize;
-  const data = rows.slice(start, start + pageSize);
-
-  return { data, total, page, pageSize };
+  return { data: rows.slice(start, start + pageSize), total, page, pageSize };
 }
 
 export async function getFilterOptions() {
   const rows = await getAllData();
-  const exchanges = [...new Set(rows.map((r) => r.exchange))].filter(Boolean).sort();
-  const industries = [...new Set(rows.map((r) => r.industry))].filter(Boolean).sort();
-  const subIndustries = [...new Set(rows.map((r) => r.subIndustry))].filter(Boolean).sort();
+  const exchanges    = [...new Set(rows.map(r => r.exchange))].filter(Boolean).sort();
+  const industries   = [...new Set(rows.map(r => r.industry))].filter(Boolean).sort();
+  const subIndustries = [...new Set(rows.map(r => r.subIndustry))].filter(Boolean).sort();
   return { exchanges, industries, subIndustries };
 }
