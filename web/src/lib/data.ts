@@ -19,6 +19,7 @@ export interface Executive {
   education: string;                // 最高学历
   birthday: string;                 // 出生年份
   tenure: string;                   // 任职起始时间
+  detail?: string;                  // 详细履历（来自 Qiankun 数据）
 }
 
 // ─── 飞书 API ───────────────────────────────────────────────
