@@ -1,6 +1,7 @@
 // 数据层：从飞书多维表格读取高管数据（飞书失败时自动回退到本地 data.json）
 // 飞书应用：cli_a924f52e217bdbd3
 // 多维表格：PlCRboHS2a62jmsa33tcRjYUntg / tbl6ymvSFfkOoCsp
+import localDataJson from "../../data.json";
 
 export interface Executive {
   name: string;
@@ -126,8 +127,7 @@ interface LocalRecord {
 
 function loadLocalData(): Executive[] {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const raw = require("../../data.json") as LocalRecord[];
+    const raw = localDataJson as unknown as LocalRecord[];
     console.log(`从本地 data.json 加载完成，共 ${raw.length} 条`);
     return raw.map((r) => ({
       name:              r.name ?? "",
