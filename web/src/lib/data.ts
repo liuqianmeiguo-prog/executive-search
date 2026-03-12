@@ -5,16 +5,18 @@
 export interface Executive {
   name: string;
   company: string;
+  code: string;
   exchange: string;
   position: string;
   industry: string;
   subIndustry: string;
   marketCap: number | null;
   marketCapCurrency: string;
-  education: string;
-  birthday: string;
-  tenure: string;
-  code: string;
+  listingYear: number | null;      // 上市年份
+  province: string;                 // 注册省份
+  education: string;                // 最高学历
+  birthday: string;                 // 出生年份
+  tenure: string;                   // 任职起始时间
 }
 
 // ─── 飞书 API ───────────────────────────────────────────────
@@ -68,9 +70,11 @@ async function fetchAllRecords(token: string): Promise<Executive[]> {
         subIndustry:       String(f["二级行业"]        ?? ""),
         marketCap:         f["市值（亿）"] != null ? Number(f["市值（亿）"]) : null,
         marketCapCurrency: String(f["市值币种"]        ?? "CNY"),
+        listingYear:       f["上市年份"] != null ? Number(f["上市年份"]) : null,
+        province:          String(f["注册省份"]        ?? ""),
         education:         String(f["最高学历"]        ?? ""),
-        birthday:          String(f["年龄"]            ?? ""),
-        tenure:            String(f["注册省份"]        ?? ""),
+        birthday:          String(f["出生年份"]        ?? ""),
+        tenure:            String(f["任职起始时间"]    ?? ""),
       });
     }
 
