@@ -131,7 +131,10 @@ function loadLocalData(): Executive[] {
     const candidates = [
       path.join(process.cwd(), "data.json"),
       path.join(process.cwd(), "web", "data.json"),
+      path.join(__dirname, "../../../../data.json"),
+      path.join(__dirname, "../../../../../data.json"),
     ];
+    console.log("查找 data.json，cwd:", process.cwd(), "候选路径:", candidates);
     for (const p of candidates) {
       if (fs.existsSync(p)) {
         const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as LocalRecord[];
