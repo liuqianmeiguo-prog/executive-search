@@ -23,6 +23,6 @@ export async function GET(req: NextRequest) {
     pageSize: sp.get("pageSize") ? Math.min(Number(sp.get("pageSize")), 200) : 50,
   };
 
-  const result = searchData(params);
+  const result = await searchData(params);
   return NextResponse.json(result);
 }
