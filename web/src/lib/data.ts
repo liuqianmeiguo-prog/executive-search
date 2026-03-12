@@ -1,5 +1,6 @@
-import path from "path";
-import fs from "fs";
+// 数据层：从飞书多维表格读取高管数据
+// 飞书应用：cli_a924f52e217bdbd3
+// 多维表格：PlCRboHS2a62jmsa33tcRjYUntg / tbl6ymvSFfkOoCsp
 
 export interface Executive {
   name: string;
@@ -86,55 +87,27 @@ async function fetchAllRecords(token: string): Promise<Executive[]> {
 // ─── 缓存（TTL 10分钟，避免每次请求都调飞书 API）──────────────
 
 let _cache: Executive[] | null = null;
+let _cacheTime = 0;
+const CACHE_TTL = 10 * 60 * 1000; // 10分钟
 
-export function getAllData(): Executive[] {
-  if (_cache) return _cache;
+export async function getAllData(): Promise<Executive[]> {
+  if (_cache && Date.now() - _cacheTime < CACHE_TTL) return _cache;
 
-  // Vercel serverless 函数中 process.cwd() 指向 /var/task
-  // data.json 在项目根目录，需要用多种路径尝试
-  const candidates = [
-    path.join(process.cwd(), "data.json"),
-    path.join(process.cwd(), "web", "data.json"),
-    path.join("/var/task", "data.json"),
-    path.join("/var/task", "web", "data.json"),
-  ];
-
-  let raw: string | null = null;
-  for (const p of candidates) {
-    try {
-      raw = fs.readFileSync(p, "utf-8");
-      break;
-    } catch {
-      // 继续尝试下一个路径
-    }
-  }
-
-  if (!raw) {
-    console.error("data.json not found, tried:", candidates);
+  try {
+    const token = await getTenantAccessToken();
+    _cache = await fetchAllRecords(token);
+    _cacheTime = Date.now();
+    console.log(`飞书多维表格加载完成，共 ${_cache.length} 条`);
+  } catch (e) {
+    console.error("飞书多维表格加载失败:", e);
+    if (_cache) return _cache; // 返回旧缓存
     return [];
   }
-
-  const parsed = JSON.parse(raw);
-  // 兼容两种字段名格式（code/company 或 stockCode/companyName）
-  _cache = parsed.map((r: Record<string, unknown>) => ({
-    name: r.name,
-    company: r.company ?? r.companyName,
-    exchange: r.exchange,
-    position: r.position,
-    industry: r.industry,
-    subIndustry: r.subIndustry,
-    marketCap: r.marketCap ?? null,
-    marketCapCurrency: r.marketCapCurrency ?? "CNY",
-    education: r.education,
-    birthday: r.birthday,
-    tenure: r.tenure,
-    code: r.code ?? r.stockCode,
-  })) as Executive[];
 
   return _cache;
 }
 
-export function searchData(params: {
+export async function searchData(params: {
   name?: string;
   company?: string;
   exchange?: string[];
@@ -145,7 +118,7 @@ export function searchData(params: {
   capMax?: number;
   page?: number;
   pageSize?: number;
-}): { data: Executive[]; total: number; page: number; pageSize: number } {
+}): Promise<{ data: Executive[]; total: number; page: number; pageSize: number }> {
   const {
     name,
     company,
@@ -159,7 +132,7 @@ export function searchData(params: {
     pageSize = 50,
   } = params;
 
-  let rows = getAllData();
+  let rows = await getAllData();
 
   if (name) {
     const q = name.toLowerCase();
@@ -196,8 +169,8 @@ export function searchData(params: {
   return { data, total, page, pageSize };
 }
 
-export function getFilterOptions() {
-  const rows = getAllData();
+export async function getFilterOptions() {
+  const rows = await getAllData();
   const exchanges = [...new Set(rows.map((r) => r.exchange))].filter(Boolean).sort();
   const industries = [...new Set(rows.map((r) => r.industry))].filter(Boolean).sort();
   const subIndustries = [...new Set(rows.map((r) => r.subIndustry))].filter(Boolean).sort();
