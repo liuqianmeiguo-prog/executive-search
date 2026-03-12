@@ -123,7 +123,6 @@ interface LocalRecord {
   position: string; industry: string; subIndustry: string;
   marketCapValue?: number; marketCapCurrency?: string; listingYear?: number;
   registrationLoc?: string; education?: string[]; age?: number;
-  detail?: string;
 }
 
 function loadLocalData(): Executive[] {
@@ -151,7 +150,6 @@ function loadLocalData(): Executive[] {
           education:         Array.isArray(r.education) ? r.education.join(",") : "",
           birthday:          r.age != null ? String(r.age) : "",
           tenure:            "",
-          detail:            r.detail ?? undefined,
         }));
       }
     }
