@@ -19,6 +19,7 @@ export interface Executive {
   education: string;                // 最高学历
   birthday: string;                 // 出生年份
   tenure: string;                   // 任职起始时间
+  detail?: string;                  // 详细履历（来自 Qiankun 数据）
 }
 
 // ─── 飞书 API ───────────────────────────────────────────────
@@ -122,6 +123,7 @@ interface LocalRecord {
   position: string; industry: string; subIndustry: string;
   marketCapValue?: number; marketCapCurrency?: string; listingYear?: number;
   registrationLoc?: string; education?: string[]; age?: number;
+  detail?: string;
 }
 
 function loadLocalData(): Executive[] {
@@ -149,6 +151,7 @@ function loadLocalData(): Executive[] {
           education:         Array.isArray(r.education) ? r.education.join(",") : "",
           birthday:          r.age != null ? String(r.age) : "",
           tenure:            "",
+          detail:            r.detail ?? undefined,
         }));
       }
     }

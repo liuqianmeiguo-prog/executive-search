@@ -1025,7 +1025,7 @@ function renderTable(){
       <td>${exTag(d.exchange)}</td>
       <td>${d.listingYear||'—'}</td>
       <td class="cell-cap">${fmtCap(d.marketCapValue,d.marketCapCurrency)}</td>
-      <td class="cell-name">${d.name}</td>
+      <td class="cell-name" style="cursor:pointer;" onclick="openDrawer(filtered[${s+i}])" title="点击查看详情">${d.name}${filtered[${s+i}].detail?'<span style="color:#2563eb;font-size:10px;margin-left:4px;">●</span>':''}</td>
       <td>${d.position}</td>
       <td class="cell-age">${d.age||'—'}</td>
       <td class="cell-sex">${d.gender||'—'}</td>
@@ -1112,6 +1112,10 @@ function openDrawer(d){
     ${eduHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">教育背景</div>${eduHtml}</div>` : ''}
     ${careerHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">工作经历</div>${careerHtml}</div>` : ''}
     ${hlHtml ? `<div class="drawer-sec"><div class="drawer-sec-title">主要亮点</div>${hlHtml}</div>` : ''}
+    ${d.detail ? `<div class="drawer-sec">
+      <div class="drawer-sec-title">公开履历</div>
+      <div style="font-size:13px;line-height:1.85;color:#333;white-space:pre-wrap;background:#f8faff;border-radius:8px;padding:14px 16px;border:1px solid #e8eef8;">${d.detail}</div>
+    </div>` : ''}
     <div class="drawer-sec">
       <div class="drawer-sec-title">飞书招聘匹配</div>
       <div class="drawer-fs">
