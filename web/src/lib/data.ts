@@ -1,6 +1,8 @@
-// 数据层：从飞书多维表格读取高管数据
+// 数据层：从飞书多维表格读取高管数据（飞书失败时自动回退到本地 data.json）
 // 飞书应用：cli_a924f52e217bdbd3
 // 多维表格：PlCRboHS2a62jmsa33tcRjYUntg / tbl6ymvSFfkOoCsp
+import path from "path";
+import fs from "fs";
 
 export interface Executive {
   name: string;
@@ -99,9 +101,11 @@ export async function getAllData(): Promise<Executive[]> {
     _cacheTime = Date.now();
     console.log(`飞书多维表格加载完成，共 ${_cache.length} 条`);
   } catch (e) {
-    console.error("飞书多维表格加载失败:", e);
+    console.error("飞书多维表格加载失败，回退到本地 data.json:", e);
     if (_cache) return _cache; // 返回旧缓存
-    return [];
+    // 回退到本地 data.json
+    _cache = loadLocalData();
+    _cacheTime = Date.now();
   }
 
   return _cache;
@@ -167,6 +171,49 @@ export async function searchData(params: {
   const data = rows.slice(start, start + pageSize);
 
   return { data, total, page, pageSize };
+}
+
+// ─── 本地 data.json 回退 ────────────────────────────────────────
+
+interface LocalRecord {
+  name: string; companyName: string; stockCode: string; exchange: string;
+  position: string; industry: string; subIndustry: string;
+  marketCapValue?: number; marketCapCurrency?: string; listingYear?: number;
+  registrationLoc?: string; education?: string[]; age?: number;
+}
+
+function loadLocalData(): Executive[] {
+  try {
+    const candidates = [
+      path.join(process.cwd(), "data.json"),
+      path.join(process.cwd(), "web", "data.json"),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as LocalRecord[];
+        console.log(`从本地 data.json 加载完成，共 ${raw.length} 条`);
+        return raw.map((r) => ({
+          name:              r.name ?? "",
+          company:           r.companyName ?? "",
+          code:              r.stockCode ?? "",
+          exchange:          r.exchange ?? "",
+          position:          r.position ?? "",
+          industry:          r.industry ?? "",
+          subIndustry:       r.subIndustry ?? "",
+          marketCap:         r.marketCapValue != null ? Number(r.marketCapValue) : null,
+          marketCapCurrency: r.marketCapCurrency ?? "CNY",
+          listingYear:       r.listingYear != null ? Number(r.listingYear) : null,
+          province:          r.registrationLoc ?? "",
+          education:         Array.isArray(r.education) ? r.education.join(",") : "",
+          birthday:          r.age != null ? String(r.age) : "",
+          tenure:            "",
+        }));
+      }
+    }
+  } catch (e) {
+    console.error("本地 data.json 加载失败:", e);
+  }
+  return [];
 }
 
 export async function getFilterOptions() {
