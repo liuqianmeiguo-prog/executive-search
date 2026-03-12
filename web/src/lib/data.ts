@@ -1,47 +1,50 @@
 import localDataJson from "../../data.json";
 
+// search.html が期待するフィールド名をそのまま使用
 export interface Executive {
   name: string;
-  company: string;
-  code: string;
+  stockCode: string;
+  companyName: string;
   exchange: string;
   position: string;
   industry: string;
   subIndustry: string;
-  marketCap: number | null;
+  marketCapValue: number | null;
   marketCapCurrency: string;
   listingYear: number | null;
-  province: string;
-  education: string;
-  birthday: string;
-  tenure: string;
-  detail?: string;
+  registrationLoc: string;
+  age: number | null;
+  gender: string;
+  isIPOServing: boolean;
+  background: string;
+  hasCPA: boolean;
+  hasIB: boolean;
+  education: string[];
+  careerItems: unknown[];
+  highlights: string[];
 }
 
-interface LocalRecord {
-  name: string; companyName: string; stockCode: string; exchange: string;
-  position: string; industry: string; subIndustry: string;
-  marketCapValue?: number; marketCapCurrency?: string; listingYear?: number;
-  registrationLoc?: string; education?: string[]; age?: number;
-  detail?: string;
-}
-
-const _allData: Executive[] = (localDataJson as unknown as LocalRecord[]).map((r) => ({
+const _allData: Executive[] = (localDataJson as unknown as Executive[]).map((r) => ({
   name:              r.name ?? "",
-  company:           r.companyName ?? "",
-  code:              r.stockCode ?? "",
+  stockCode:         r.stockCode ?? "",
+  companyName:       r.companyName ?? "",
   exchange:          r.exchange ?? "",
   position:          r.position ?? "",
   industry:          r.industry ?? "",
   subIndustry:       r.subIndustry ?? "",
-  marketCap:         r.marketCapValue != null ? Number(r.marketCapValue) : null,
+  marketCapValue:    r.marketCapValue != null ? Number(r.marketCapValue) : null,
   marketCapCurrency: r.marketCapCurrency ?? "CNY",
   listingYear:       r.listingYear != null ? Number(r.listingYear) : null,
-  province:          r.registrationLoc ?? "",
-  education:         Array.isArray(r.education) ? r.education.join(",") : "",
-  birthday:          r.age != null ? String(r.age) : "",
-  tenure:            "",
-  detail:            r.detail ?? undefined,
+  registrationLoc:   r.registrationLoc ?? "",
+  age:               r.age != null ? Number(r.age) : null,
+  gender:            r.gender ?? "",
+  isIPOServing:      r.isIPOServing ?? false,
+  background:        r.background ?? "",
+  hasCPA:            r.hasCPA ?? false,
+  hasIB:             r.hasIB ?? false,
+  education:         Array.isArray(r.education) ? r.education : [],
+  careerItems:       Array.isArray(r.careerItems) ? r.careerItems : [],
+  highlights:        Array.isArray(r.highlights) ? r.highlights : [],
 }));
 
 console.log(`数据加载完成，共 ${_allData.length} 条`);
@@ -59,13 +62,13 @@ export async function searchData(params: {
 
   let rows = _allData;
   if (name)                rows = rows.filter(r => r.name.toLowerCase().includes(name.toLowerCase()));
-  if (company)             rows = rows.filter(r => r.company.toLowerCase().includes(company.toLowerCase()));
+  if (company)             rows = rows.filter(r => r.companyName.toLowerCase().includes(company.toLowerCase()));
   if (exchange?.length)    rows = rows.filter(r => exchange.includes(r.exchange));
   if (industry?.length)    rows = rows.filter(r => industry.includes(r.industry));
   if (subIndustry?.length) rows = rows.filter(r => subIndustry.includes(r.subIndustry));
   if (position)            rows = rows.filter(r => r.position.toLowerCase().includes(position.toLowerCase()));
-  if (capMin != null)      rows = rows.filter(r => r.marketCap != null && r.marketCap >= capMin);
-  if (capMax != null)      rows = rows.filter(r => r.marketCap != null && r.marketCap <= capMax);
+  if (capMin != null)      rows = rows.filter(r => r.marketCapValue != null && r.marketCapValue >= capMin);
+  if (capMax != null)      rows = rows.filter(r => r.marketCapValue != null && r.marketCapValue <= capMax);
 
   const total = rows.length;
   const start = (page - 1) * pageSize;
