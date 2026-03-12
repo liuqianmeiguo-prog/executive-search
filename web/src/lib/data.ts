@@ -53,12 +53,17 @@ async function fetchAllRecords(token: string): Promise<Executive[]> {
       headers: { Authorization: `Bearer ${token}` },
     });
     const json = await res.json() as {
+      code: number;
       data: {
         items: Array<{ fields: Record<string, unknown> }>;
         has_more: boolean;
         page_token?: string;
       };
     };
+
+    if (json.code !== 0) {
+      throw new Error(`飞书 API 错误 ${json.code}`);
+    }
 
     for (const item of json.data.items) {
       const f = item.fields;
@@ -86,11 +91,11 @@ async function fetchAllRecords(token: string): Promise<Executive[]> {
   return results;
 }
 
-// ─── 缓存（TTL 10分钟，避免每次请求都调飞书 API）──────────────
+// ─── 缓存（TTL 10分钟）──────────────────────────────────────
 
 let _cache: Executive[] | null = null;
 let _cacheTime = 0;
-const CACHE_TTL = 10 * 60 * 1000; // 10分钟
+const CACHE_TTL = 10 * 60 * 1000;
 
 export async function getAllData(): Promise<Executive[]> {
   if (_cache && Date.now() - _cacheTime < CACHE_TTL) return _cache;
@@ -102,13 +107,55 @@ export async function getAllData(): Promise<Executive[]> {
     console.log(`飞书多维表格加载完成，共 ${_cache.length} 条`);
   } catch (e) {
     console.error("飞书多维表格加载失败，回退到本地 data.json:", e);
-    if (_cache) return _cache; // 返回旧缓存
-    // 回退到本地 data.json
+    if (_cache) return _cache;
     _cache = loadLocalData();
     _cacheTime = Date.now();
   }
 
   return _cache;
+}
+
+// ─── 本地 data.json 回退 ────────────────────────────────────
+
+interface LocalRecord {
+  name: string; companyName: string; stockCode: string; exchange: string;
+  position: string; industry: string; subIndustry: string;
+  marketCapValue?: number; marketCapCurrency?: string; listingYear?: number;
+  registrationLoc?: string; education?: string[]; age?: number;
+}
+
+function loadLocalData(): Executive[] {
+  try {
+    const candidates = [
+      path.join(process.cwd(), "data.json"),
+      path.join(process.cwd(), "web", "data.json"),
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as LocalRecord[];
+        console.log(`从本地 data.json 加载完成，共 ${raw.length} 条`);
+        return raw.map((r) => ({
+          name:              r.name ?? "",
+          company:           r.companyName ?? "",
+          code:              r.stockCode ?? "",
+          exchange:          r.exchange ?? "",
+          position:          r.position ?? "",
+          industry:          r.industry ?? "",
+          subIndustry:       r.subIndustry ?? "",
+          marketCap:         r.marketCapValue != null ? Number(r.marketCapValue) : null,
+          marketCapCurrency: r.marketCapCurrency ?? "CNY",
+          listingYear:       r.listingYear != null ? Number(r.listingYear) : null,
+          province:          r.registrationLoc ?? "",
+          education:         Array.isArray(r.education) ? r.education.join(",") : "",
+          birthday:          r.age != null ? String(r.age) : "",
+          tenure:            "",
+        }));
+      }
+    }
+  } catch (e) {
+    console.error("本地 data.json 加载失败:", e);
+  }
+  return [];
 }
 
 export async function searchData(params: {
@@ -171,49 +218,6 @@ export async function searchData(params: {
   const data = rows.slice(start, start + pageSize);
 
   return { data, total, page, pageSize };
-}
-
-// ─── 本地 data.json 回退 ────────────────────────────────────────
-
-interface LocalRecord {
-  name: string; companyName: string; stockCode: string; exchange: string;
-  position: string; industry: string; subIndustry: string;
-  marketCapValue?: number; marketCapCurrency?: string; listingYear?: number;
-  registrationLoc?: string; education?: string[]; age?: number;
-}
-
-function loadLocalData(): Executive[] {
-  try {
-    const candidates = [
-      path.join(process.cwd(), "data.json"),
-      path.join(process.cwd(), "web", "data.json"),
-    ];
-    for (const p of candidates) {
-      if (fs.existsSync(p)) {
-        const raw = JSON.parse(fs.readFileSync(p, "utf-8")) as LocalRecord[];
-        console.log(`从本地 data.json 加载完成，共 ${raw.length} 条`);
-        return raw.map((r) => ({
-          name:              r.name ?? "",
-          company:           r.companyName ?? "",
-          code:              r.stockCode ?? "",
-          exchange:          r.exchange ?? "",
-          position:          r.position ?? "",
-          industry:          r.industry ?? "",
-          subIndustry:       r.subIndustry ?? "",
-          marketCap:         r.marketCapValue != null ? Number(r.marketCapValue) : null,
-          marketCapCurrency: r.marketCapCurrency ?? "CNY",
-          listingYear:       r.listingYear != null ? Number(r.listingYear) : null,
-          province:          r.registrationLoc ?? "",
-          education:         Array.isArray(r.education) ? r.education.join(",") : "",
-          birthday:          r.age != null ? String(r.age) : "",
-          tenure:            "",
-        }));
-      }
-    }
-  } catch (e) {
-    console.error("本地 data.json 加载失败:", e);
-  }
-  return [];
 }
 
 export async function getFilterOptions() {
