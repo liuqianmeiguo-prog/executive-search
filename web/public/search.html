@@ -250,6 +250,31 @@ td.cell-act { text-align: center; }
 /* Detail button */
 .btn-detail { padding: 4px 12px; background: #0f2744; border: none; border-radius: 4px; font-size: 11px; color: #fff; cursor: pointer; white-space: nowrap; font-weight: 500; transition: background .15s; }
 .btn-detail:hover { background: #1a3a60; }
+.btn-resume { padding: 4px 12px; background: #15803d; border: none; border-radius: 4px; font-size: 11px; color: #fff; cursor: pointer; white-space: nowrap; font-weight: 500; transition: background .15s; }
+.btn-resume:hover { background: #166534; }
+
+/* Resume modal */
+.resume-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:3000; }
+.resume-overlay.open { display:block; }
+.resume-modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:12px; width:580px; max-width:95vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.25); z-index:3001; }
+.resume-header { padding:18px 22px 14px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-start; }
+.resume-title { font-size:17px; font-weight:700; color:#0f2744; }
+.resume-subtitle { font-size:13px; color:#888; margin-top:3px; }
+.resume-close { background:none; border:none; font-size:20px; color:#999; cursor:pointer; padding:0 4px; line-height:1; }
+.resume-close:hover { color:#333; }
+.resume-body { padding:18px 22px; overflow-y:auto; flex:1; }
+.resume-empty { color:#bbb; font-size:13px; font-style:italic; text-align:center; padding:30px 0; }
+.resume-career-item { display:flex; gap:14px; margin-bottom:18px; }
+.resume-tl { display:flex; flex-direction:column; align-items:center; padding-top:3px; }
+.resume-tl-dot { width:10px; height:10px; border-radius:50%; background:#0f2744; flex-shrink:0; }
+.resume-tl-line { width:2px; flex:1; background:#e0e5ee; margin-top:4px; }
+.resume-career-body { flex:1; }
+.resume-period { font-size:11px; color:#999; margin-bottom:2px; }
+.resume-role { font-size:14px; font-weight:600; color:#1a1a1a; }
+.resume-co { font-size:13px; color:#555; margin-top:1px; }
+.resume-detail { font-size:12px; color:#777; margin-top:4px; line-height:1.5; }
+.resume-modal { display:none; }
+.resume-modal.open { display:flex; }
 
 /* Toast notification */
 #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #0f2744; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 99999; box-shadow: 0 4px 16px rgba(0,0,0,.25); transition: opacity .4s; pointer-events: none; }
@@ -507,6 +532,7 @@ td.cell-act { text-align: center; }
               <th class="col-edu">学历</th>
               <th class="col-act" style="min-width:70px;">飞书</th>
               <th class="col-act"></th>
+              <th class="col-resume" style="min-width:80px;">人选履历</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -522,6 +548,17 @@ td.cell-act { text-align: center; }
 </div><!-- /main -->
 
 <!-- ─── Detail Drawer ─── -->
+<div class="resume-overlay" id="resume-overlay" onclick="closeResume()"></div>
+<div class="resume-modal" id="resume-modal">
+  <div class="resume-header">
+    <div>
+      <div class="resume-title" id="rm-name"></div>
+      <div class="resume-subtitle" id="rm-sub"></div>
+    </div>
+    <button class="resume-close" onclick="closeResume()">✕</button>
+  </div>
+  <div class="resume-body" id="rm-body"></div>
+</div>
 <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
 <div class="drawer" id="detail-drawer">
   <div class="drawer-head">
@@ -1033,6 +1070,7 @@ function renderTable(){
       <td class="cell-edu">${d.background||'—'}</td>
       <td class="cell-act">${fsStatusBadge(d)}</td>
       <td class="cell-act"><button class="btn-detail" onclick="openDrawer(filtered[${s+i}])">详情</button></td>
+      <td class="cell-resume"><button class="btn-resume" onclick="openResume(filtered[${s+i}])">履历</button></td>
     </tr>`).join('');
 
   renderPagination(page,pages);
@@ -1136,6 +1174,38 @@ function openDrawer(d){
 function closeDrawer(){
   document.getElementById('drawer-overlay').classList.remove('open');
   document.getElementById('detail-drawer').classList.remove('open');
+}
+
+function openResume(d){
+  if(!d) return;
+  document.getElementById('rm-name').textContent = d.name;
+  document.getElementById('rm-sub').textContent  = d.position + '　' + d.companyName;
+  const body = document.getElementById('rm-body');
+  const items = d.careerItems || [];
+  if(items.length === 0){
+    body.innerHTML = '<div class="resume-empty">暂无工作经历数据</div>';
+  } else {
+    body.innerHTML = items.map((c, idx, arr) => `
+      <div class="resume-career-item">
+        <div class="resume-tl">
+          <div class="resume-tl-dot"></div>
+          ${idx < arr.length-1 ? '<div class="resume-tl-line"></div>' : ''}
+        </div>
+        <div class="resume-career-body">
+          <div class="resume-period">${c.period||''}</div>
+          <div class="resume-role">${c.role||''}</div>
+          <div class="resume-co">${c.company||''}</div>
+          ${c.detail ? `<div class="resume-detail">${c.detail}</div>` : ''}
+        </div>
+      </div>`).join('');
+  }
+  document.getElementById('resume-overlay').classList.add('open');
+  document.getElementById('resume-modal').classList.add('open');
+}
+
+function closeResume(){
+  document.getElementById('resume-overlay').classList.remove('open');
+  document.getElementById('resume-modal').classList.remove('open');
 }
 
 function renderPagination(cur,total){
