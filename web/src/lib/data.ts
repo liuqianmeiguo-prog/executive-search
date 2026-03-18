@@ -22,6 +22,7 @@ export interface Executive {
   education: string[];
   careerItems: unknown[];
   highlights: string[];
+  publicResumeRaw: string;
 }
 
 const _allData: Executive[] = (localDataJson as unknown as Executive[]).map((r) => ({
@@ -45,6 +46,7 @@ const _allData: Executive[] = (localDataJson as unknown as Executive[]).map((r) 
   education:         Array.isArray(r.education) ? r.education : [],
   careerItems:       Array.isArray(r.careerItems) ? r.careerItems : [],
   highlights:        Array.isArray(r.highlights) ? r.highlights : [],
+  publicResumeRaw:   (r as unknown as Record<string, string>).publicResumeRaw ?? "",
 }));
 
 console.log(`数据加载完成，共 ${_allData.length} 条`);
