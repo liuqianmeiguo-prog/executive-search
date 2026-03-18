@@ -1176,14 +1176,63 @@ function closeDrawer(){
   document.getElementById('detail-drawer').classList.remove('open');
 }
 
+function parseResumeToItems(raw) {
+  if (!raw) return [];
+  const items = [];
+  // 按分号或句号切分句子
+  const sentences = raw.split(/[；;。]/).map(s => s.trim()).filter(Boolean);
+  const periodRe = /(\d{4})年(\d{1,2})月[至到](\d{4})年(\d{1,2})月/;
+  const periodStartRe = /(\d{4})年(\d{1,2})月[起，,]/;
+  const tillNowRe = /(\d{4})年(\d{1,2})月[至到]?今/;
+  const roleRe = /(?:历任|先后任|担任|出任|兼任|任职于|任|获)\s*(.+)/;
+
+  for (const s of sentences) {
+    let period = '';
+    let rest = s;
+
+    const m1 = s.match(periodRe);
+    const m2 = s.match(tillNowRe);
+    if (m1) {
+      period = `${m1[1]}年${m1[2]}月 — ${m1[3]}年${m1[4]}月`;
+      rest = s.replace(m1[0], '');
+    } else if (m2) {
+      period = `${m2[1]}年${m2[2]}月 — 至今`;
+      rest = s.replace(m2[0], '');
+    } else {
+      const m3 = s.match(periodStartRe);
+      if (m3) {
+        period = `${m3[1]}年${m3[2]}月起`;
+        rest = s.replace(m3[0], '');
+      }
+    }
+
+    // 没有时间段的句子（如教育经历或介绍）跳过
+    if (!period) continue;
+
+    // 提取职位/描述
+    rest = rest.replace(/^[，,、\s]+/, '');
+    const rm = rest.match(roleRe);
+    const role = rm ? rm[1].trim() : rest.trim();
+    if (!role) continue;
+
+    items.push({ period, role });
+  }
+  return items;
+}
+
 function openResume(d){
   if(!d) return;
   document.getElementById('rm-name').textContent = d.name;
   document.getElementById('rm-sub').textContent  = d.position + '　' + d.companyName;
   const body = document.getElementById('rm-body');
-  const items = d.careerItems || [];
+
+  const items = parseResumeToItems(d.publicResumeRaw);
+
   if(items.length === 0){
-    body.innerHTML = '<div class="resume-empty">暂无工作经历数据</div>';
+    const raw = d.publicResumeRaw || '';
+    body.innerHTML = raw
+      ? `<div class="detail-text" style="font-size:13px;color:#444;line-height:1.9;">${raw}</div>`
+      : '<div class="resume-empty">暂无公开履历</div>';
   } else {
     body.innerHTML = items.map((c, idx, arr) => `
       <div class="resume-career-item">
@@ -1192,10 +1241,8 @@ function openResume(d){
           ${idx < arr.length-1 ? '<div class="resume-tl-line"></div>' : ''}
         </div>
         <div class="resume-career-body">
-          <div class="resume-period">${c.period||''}</div>
-          <div class="resume-role">${c.role||''}</div>
-          <div class="resume-co">${c.company||''}</div>
-          ${c.detail ? `<div class="resume-detail">${c.detail}</div>` : ''}
+          <div class="resume-period">${c.period}</div>
+          <div class="resume-role">${c.role}</div>
         </div>
       </div>`).join('');
   }
