@@ -363,7 +363,7 @@ def _split(v: str) -> list:
     return [s.strip() for s in re.split(r"[;；,，]", str(v)) if s.strip()]
 
 
-def build_person_rows(stock_code: str, basic: dict, mgmt: dict, hk_cap_map: dict | None = None) -> list:
+def build_person_rows(stock_code: str, basic: dict, mgmt: dict, hk_cap_map: dict | None = None, bio_map: dict | None = None) -> list:
     """将单家公司的 basic + mgmt 字典转换为高管记录列表"""
     company_name = _v(basic, "ths_corp_cn_name_stock")
     if not company_name:
@@ -416,6 +416,7 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict, hk_cap_map: dict
 
     cur_year = datetime.now().year
     rows, seen = [], set()
+    stock_bios = (bio_map or {}).get(stock_code.upper(), {})
 
     # (现任字段, 历任字段, 职位名, 是否多值)
     pos_fields = [
@@ -439,7 +440,24 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict, hk_cap_map: dict
                 continue
             seen.add(name)
             attr = get_attr(name)
-            age  = cur_year - attr["birth_year"] if attr["birth_year"] else None
+
+            # 优先用个人简历接口的数据补充字段
+            bio_data   = stock_bios.get(name, {})
+            bio_text   = bio_data.get("bio", "")
+            bio_gender = bio_data.get("gender", "")
+            bio_edu    = bio_data.get("education", "")
+            bio_birth  = bio_data.get("birth_year", "")
+
+            # 出生年份：简历接口优先，其次用现有指标
+            birth_year = int(bio_birth) if bio_birth and bio_birth.isdigit() \
+                         else (attr["birth_year"] if attr["birth_year"] else None)
+            age = cur_year - birth_year if birth_year else None
+
+            # 性别：简历接口优先
+            gender = bio_gender or attr.get("gender", "")
+
+            # 学历：简历接口优先
+            education = bio_edu or attr["education"]
 
             rows.append({
                 "industry":          industry or "—",
@@ -454,20 +472,21 @@ def build_person_rows(stock_code: str, basic: dict, mgmt: dict, hk_cap_map: dict
                 "name":              name,
                 "location":          reg_loc,
                 "position":          position,
-                "background":        attr["education"] or "",
+                "background":        education or "",
                 "linkedin":          "",
                 "isIPOServing":      is_ipo,
                 "age":               age,
-                "gender":            attr["gender"],
+                "gender":            gender,
                 "hasCPA":            False,
                 "hasIB":             False,
                 "education": (
-                    [{"school": "", "degree": attr["education"],
+                    [{"school": "", "degree": education,
                       "major": "", "year": ""}]
-                    if attr["education"] else []
+                    if education else []
                 ),
-                "careerItems": [],
-                "highlights":  [],
+                "careerItems":       [],
+                "highlights":        [],
+                "publicResumeRaw":   bio_text,
             })
 
     return rows
@@ -537,6 +556,72 @@ def save_data_json(rows: list):
 
 
 # ══════════════════════════════════════════════════════════════
+#  个人简历接口（data_pool / p04113）
+# ══════════════════════════════════════════════════════════════
+
+def fetch_mgmt_bio(codes: list) -> dict:
+    """
+    调用 /api/v1/data_pool 接口，逐只获取管理层个人简历。
+    返回 {stock_code: {姓名: {bio, gender, edu, birth_year}}} 字典。
+    """
+    url = f"{CONFIG['api_base']}/api/v1/data_pool"
+    outputpara = ",".join(f"p04113_f{i:03d}" for i in range(1, 11))
+    result = {}
+    total = len(codes)
+
+    for i, code in enumerate(codes, 1):
+        if i % 200 == 0 or i == total:
+            print(f"  [{i:>5}/{total}] 个人简历...", end="\r", flush=True)
+        try:
+            payload = {
+                "reportname": "p04113",
+                "functionpara": {"type": "现任管理层", "code": code},
+                "outputpara": outputpara,
+            }
+            resp = _session.post(url, json=payload, timeout=20)
+            resp.raise_for_status()
+            data = resp.json()
+
+            if data.get("errorcode", 0) != 0:
+                continue
+
+            # 响应结构：data.tables[0].table.{field: [values...]}
+            tables = data.get("tables") or data.get("data", {}).get("tables") or []
+            for t in tables:
+                tbl = t.get("table") or t.get("data") or {}
+                names      = tbl.get("p04113_f001") or []
+                positions  = tbl.get("p04113_f002") or []
+                genders    = tbl.get("p04113_f004") or []
+                edus       = tbl.get("p04113_f006") or []
+                birth_yrs  = tbl.get("p04113_f007") or []
+                bios       = tbl.get("p04113_f010") or []
+
+                stock_bio = {}
+                for idx, name in enumerate(names):
+                    name = str(name).strip()
+                    if not name:
+                        continue
+                    def _get(lst, i): return str(lst[i]).strip() if i < len(lst) else ""
+                    stock_bio[name] = {
+                        "position":   _get(positions, idx),
+                        "gender":     _get(genders,   idx),
+                        "education":  _get(edus,      idx),
+                        "birth_year": _get(birth_yrs, idx),
+                        "bio":        _get(bios,      idx),
+                    }
+                if stock_bio:
+                    result[code.upper()] = stock_bio
+
+        except Exception:
+            pass
+
+        time.sleep(0.15)
+
+    print(f"\n  → 个人简历完成，共 {len(result)} 只有数据")
+    return result
+
+
+# ══════════════════════════════════════════════════════════════
 #  主流程
 # ══════════════════════════════════════════════════════════════
 
@@ -584,7 +669,7 @@ def main():
         basic_map.setdefault(code, {})["sw_industry_lv2"] = val
 
     # ── 5. 拉取高管信息
-    print("\n[5/6] 拉取高管信息...")
+    print("\n[5/7] 拉取高管信息...")
     mgmt_map = fetch_all(codes, MGMT_INDICATORS, "高管信息")
 
     # ── 5b. 拉取港股市值（新浪行情）
@@ -594,8 +679,12 @@ def main():
         print("\n[5b] 拉取港股市值（新浪行情）...")
         hk_cap_map = fetch_hk_market_cap(hk_codes)
 
+    # ── 5c. 拉取个人简历（data_pool / p04113）
+    print("\n[6/7] 拉取个人简历...")
+    bio_map = fetch_mgmt_bio(codes) if not test_mode else {}
+
     # ── 6. 转换 & 写入
-    print("\n[6/6] 转换数据并写入 JSON...")
+    print("\n[7/7] 转换数据并写入 JSON...")
     all_codes = sorted(set(list(basic_map) + list(mgmt_map)))
     all_rows, skipped = [], 0
 
@@ -605,6 +694,7 @@ def main():
             basic_map.get(code, {}),
             mgmt_map.get(code, {}),
             hk_cap_map,
+            bio_map,
         )
         if rows:
             all_rows.extend(rows)
